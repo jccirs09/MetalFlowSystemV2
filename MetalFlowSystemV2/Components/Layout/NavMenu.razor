@@ -36,6 +36,39 @@
             </NavLink>
         </div>
 
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <span class="text-light ms-3 small text-uppercase">Admin</span>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="admin/branches">
+                        <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Branches
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="admin/production-areas">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Areas
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="admin/shifts">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Shifts
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="admin/trucks">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Trucks
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="admin/users">
+                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Users
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">

@@ -1,0 +1,127 @@
+@page "/admin/trucks"
+@attribute [Authorize(Roles = "Admin")]
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@inject TruckAdminService TruckService
+@inject BranchAdminService BranchService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h5" Class="mb-4">Trucks</MudText>
+
+<MudGrid Class="mb-4">
+    <MudItem xs="12" sm="6" md="4">
+        <MudSelect T="int?" Label="Select Branch" Value="_selectedBranchId" ValueChanged="OnBranchChanged" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+            @foreach (var branch in _branches)
+            {
+                <MudSelectItem Value="@((int?)branch.Id)">@branch.Code - @branch.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="4" Class="d-flex align-center">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Disabled="@(_selectedBranchId == null)">Create Truck</MudButton>
+    </MudItem>
+</MudGrid>
+
+<MudTable Items="_trucks" Hover="true" Loading="_loading">
+    <HeaderContent>
+        <MudTh>Code</MudTh>
+        <MudTh>Plate</MudTh>
+        <MudTh>Capacity (Lbs)</MudTh>
+        <MudTh>Driver</MudTh>
+        <MudTh>Active</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Code">@context.TruckCode</MudTd>
+        <MudTd DataLabel="Plate">@context.Plate</MudTd>
+        <MudTd DataLabel="Capacity">@context.CapacityLbs.ToString("N2")</MudTd>
+        <MudTd DataLabel="Driver">@(context.AssignedDriver?.FullName ?? context.AssignedDriver?.UserName ?? "-")</MudTd>
+        <MudTd DataLabel="Active">
+            <MudCheckBox Value="@context.IsActive" ReadOnly="true" Color="Color.Primary" Dense="true" />
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDialog(context))" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>@(_selectedBranchId == null ? "Select a branch to view trucks." : "No trucks found.")</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    private List<Branch> _branches = new();
+    private List<Truck> _trucks = new();
+    private int? _selectedBranchId;
+    private bool _loading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _branches = await BranchService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading branches: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OnBranchChanged(int? branchId)
+    {
+        _selectedBranchId = branchId;
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        if (_selectedBranchId == null)
+        {
+            _trucks.Clear();
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _trucks = await TruckService.GetByBranchIdAsync(_selectedBranchId.Value);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        if (_selectedBranchId == null) return;
+
+        var parameters = new DialogParameters { ["BranchId"] = _selectedBranchId.Value };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false };
+        var dialog = await DialogService.ShowAsync<TruckDialog>("Create Truck", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task OpenEditDialog(Truck truck)
+    {
+        var parameters = new DialogParameters { ["Truck"] = truck, ["BranchId"] = _selectedBranchId.Value };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false };
+        var dialog = await DialogService.ShowAsync<TruckDialog>("Edit Truck", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+}
