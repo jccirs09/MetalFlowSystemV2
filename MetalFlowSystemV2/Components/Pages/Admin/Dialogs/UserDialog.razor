@@ -8,8 +8,8 @@
 <MudDialog>
     <DialogContent>
         <MudForm @ref="form" @bind-IsValid="@success">
-            <MudTextField @bind-Value="model.Email" Label="Email" ReadOnly="true" />
-            <MudTextField @bind-Value="model.FullName" Label="Full Name" Required="true" RequiredError="Full Name is required" MaxLength="100" />
+            <MudTextField @bind-Value="_email" Label="Email" ReadOnly="true" />
+            <MudTextField @bind-Value="_fullName" Label="Full Name" Required="true" RequiredError="Full Name is required" MaxLength="100" />
 
             <MudText Typo="Typo.subtitle1" Class="mt-4">Roles</MudText>
             @foreach (var role in _allRoles)
@@ -29,9 +29,12 @@
 
     [Parameter] public ApplicationUser User { get; set; }
 
-    private ApplicationUser model = new();
     private MudForm form;
     private bool success;
+
+    // Local model fields to avoid mutating User directly
+    private string _email;
+    private string _fullName;
     private List<string> _allRoles = new();
     private HashSet<string> _userRoles = new();
 
@@ -39,10 +42,9 @@
     {
         if (User != null)
         {
-            // We are editing an existing user attached to context, but we should be careful.
-            // Better to load fresh or clone. Here I'll just use the object but updating it might require tracking.
-            // Actually UserManager methods update the user.
-            model = User;
+            // Copy values to local fields
+            _email = User.Email;
+            _fullName = User.FullName;
 
             _allRoles = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(RoleManager.Roles.Select(r => r.Name!));
             var roles = await UserManager.GetRolesAsync(User);
@@ -67,14 +69,14 @@
             try
             {
                 // Update User Details
-                var user = await UserManager.FindByIdAsync(model.Id);
+                var user = await UserManager.FindByIdAsync(User.Id);
                 if (user == null)
                 {
                     Snackbar.Add("User not found", Severity.Error);
                     return;
                 }
 
-                user.FullName = model.FullName;
+                user.FullName = _fullName;
                 var result = await UserManager.UpdateAsync(user);
                 if (!result.Succeeded)
                 {
