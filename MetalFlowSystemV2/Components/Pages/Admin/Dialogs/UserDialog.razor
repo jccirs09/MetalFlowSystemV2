@@ -1,0 +1,126 @@
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using MetalFlowSystemV2.Data
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudTextField @bind-Value="_email" Label="Email" ReadOnly="true" />
+            <MudTextField @bind-Value="_fullName" Label="Full Name" Required="true" RequiredError="Full Name is required" MaxLength="100" />
+
+            <MudText Typo="Typo.subtitle1" Class="mt-4">Roles</MudText>
+            @foreach (var role in _allRoles)
+            {
+                <MudCheckBox T="bool" Label="@role" Value="@(_userRoles.Contains(role))" ValueChanged="@((bool v) => UpdateRole(role, v))" Color="Color.Primary" Dense="true" />
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public ApplicationUser User { get; set; }
+
+    private MudForm form;
+    private bool success;
+
+    // Local model fields to avoid mutating User directly
+    private string _email;
+    private string _fullName;
+    private List<string> _allRoles = new();
+    private HashSet<string> _userRoles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (User != null)
+        {
+            // Copy values to local fields
+            _email = User.Email;
+            _fullName = User.FullName;
+
+            _allRoles = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(RoleManager.Roles.Select(r => r.Name!));
+            var roles = await UserManager.GetRolesAsync(User);
+            _userRoles = new HashSet<string>(roles);
+        }
+    }
+
+    private void UpdateRole(string role, bool isSelected)
+    {
+        if (isSelected)
+            _userRoles.Add(role);
+        else
+            _userRoles.Remove(role);
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (success)
+        {
+            try
+            {
+                // Update User Details
+                var user = await UserManager.FindByIdAsync(User.Id);
+                if (user == null)
+                {
+                    Snackbar.Add("User not found", Severity.Error);
+                    return;
+                }
+
+                user.FullName = _fullName;
+                var result = await UserManager.UpdateAsync(user);
+                if (!result.Succeeded)
+                {
+                    foreach (var error in result.Errors)
+                        Snackbar.Add(error.Description, Severity.Error);
+                    return;
+                }
+
+                // Update Roles
+                var currentRoles = await UserManager.GetRolesAsync(user);
+                var toAdd = _userRoles.Except(currentRoles).ToList();
+                var toRemove = currentRoles.Except(_userRoles).ToList();
+
+                if (toAdd.Any())
+                {
+                    var addResult = await UserManager.AddToRolesAsync(user, toAdd);
+                    if (!addResult.Succeeded)
+                    {
+                         foreach (var error in addResult.Errors)
+                            Snackbar.Add(error.Description, Severity.Error);
+                         return;
+                    }
+                }
+
+                if (toRemove.Any())
+                {
+                    var removeResult = await UserManager.RemoveFromRolesAsync(user, toRemove);
+                    if (!removeResult.Succeeded)
+                    {
+                         foreach (var error in removeResult.Errors)
+                            Snackbar.Add(error.Description, Severity.Error);
+                         return;
+                    }
+                }
+
+                Snackbar.Add("User updated", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

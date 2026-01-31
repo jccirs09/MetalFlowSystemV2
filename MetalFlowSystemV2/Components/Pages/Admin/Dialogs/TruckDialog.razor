@@ -1,0 +1,104 @@
+@using MetalFlowSystemV2.Data
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@using Microsoft.AspNetCore.Identity
+@inject TruckAdminService TruckService
+@inject UserManager<ApplicationUser> UserManager
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudTextField @bind-Value="model.TruckCode" Label="Code" Required="true" RequiredError="Truck Code is required" MaxLength="20" />
+            <MudTextField @bind-Value="model.Plate" Label="Plate" Required="true" RequiredError="Plate is required" MaxLength="20" />
+            <MudNumericField @bind-Value="model.CapacityLbs" Label="Capacity (Lbs)" Required="true" Min="0" Format="F2" />
+            <MudTextField @bind-Value="model.Description" Label="Description" MaxLength="500" Lines="3" />
+
+            <MudSelect @bind-Value="model.AssignedDriverUserId" Label="Assigned Driver" Clearable="true" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var driver in _drivers)
+                {
+                    <MudSelectItem Value="@driver.Id">@(driver.FullName ?? driver.UserName)</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudCheckBox @bind-Value="model.IsActive" Label="Active" Color="Color.Primary" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public Truck? Truck { get; set; }
+    [Parameter] public int BranchId { get; set; }
+
+    private Truck model = new();
+    private MudForm form;
+    private bool success;
+    private List<ApplicationUser> _drivers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Truck != null)
+        {
+            model = new Truck
+            {
+                Id = Truck.Id,
+                BranchId = Truck.BranchId,
+                TruckCode = Truck.TruckCode,
+                CapacityLbs = Truck.CapacityLbs,
+                Plate = Truck.Plate,
+                Description = Truck.Description,
+                AssignedDriverUserId = Truck.AssignedDriverUserId,
+                IsActive = Truck.IsActive
+            };
+        }
+        else
+        {
+            model.BranchId = BranchId;
+        }
+
+        try
+        {
+            var drivers = await UserManager.GetUsersInRoleAsync("Driver");
+            _drivers = drivers.OrderBy(u => u.FullName ?? u.UserName).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading drivers: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (success)
+        {
+            try
+            {
+                if (model.Id == 0)
+                {
+                    await TruckService.CreateAsync(model);
+                    Snackbar.Add("Truck created", Severity.Success);
+                }
+                else
+                {
+                    await TruckService.UpdateAsync(model);
+                    Snackbar.Add("Truck updated", Severity.Success);
+                }
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

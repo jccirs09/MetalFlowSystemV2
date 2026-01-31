@@ -1,0 +1,99 @@
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject ShiftAdminService ShiftService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudTextField @bind-Value="model.Code" Label="Code" Required="true" RequiredError="Code is required" MaxLength="20" />
+            <MudTextField @bind-Value="model.Name" Label="Name" Required="true" RequiredError="Name is required" MaxLength="100" />
+
+            <MudTimePicker Label="Start Time" @bind-Time="_startTime" Required="true" />
+            <MudTimePicker Label="End Time" @bind-Time="_endTime" Required="true" />
+
+            <MudCheckBox @bind-Value="model.CrossesMidnight" Label="Crosses Midnight" Color="Color.Primary" />
+            <MudCheckBox @bind-Value="model.IsActive" Label="Active" Color="Color.Primary" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public Shift? Shift { get; set; }
+    [Parameter] public int BranchId { get; set; }
+
+    private Shift model = new();
+    private MudForm form;
+    private bool success;
+
+    private TimeSpan? _startTime;
+    private TimeSpan? _endTime;
+
+    protected override void OnInitialized()
+    {
+        if (Shift != null)
+        {
+            model = new Shift
+            {
+                Id = Shift.Id,
+                BranchId = Shift.BranchId,
+                Code = Shift.Code,
+                Name = Shift.Name,
+                StartTime = Shift.StartTime,
+                EndTime = Shift.EndTime,
+                CrossesMidnight = Shift.CrossesMidnight,
+                IsActive = Shift.IsActive
+            };
+            _startTime = model.StartTime.ToTimeSpan();
+            _endTime = model.EndTime.ToTimeSpan();
+        }
+        else
+        {
+            model.BranchId = BranchId;
+        }
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (_startTime == null || _endTime == null)
+        {
+            Snackbar.Add("Start and End times are required", Severity.Error);
+            return;
+        }
+
+        if (success)
+        {
+            try
+            {
+                model.StartTime = TimeOnly.FromTimeSpan(_startTime.Value);
+                model.EndTime = TimeOnly.FromTimeSpan(_endTime.Value);
+
+                if (model.Id == 0)
+                {
+                    await ShiftService.CreateAsync(model);
+                    Snackbar.Add("Shift created", Severity.Success);
+                }
+                else
+                {
+                    await ShiftService.UpdateAsync(model);
+                    Snackbar.Add("Shift updated", Severity.Success);
+                }
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

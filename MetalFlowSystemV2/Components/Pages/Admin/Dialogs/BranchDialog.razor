@@ -1,0 +1,78 @@
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject BranchAdminService BranchService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudTextField @bind-Value="model.Code" Label="Code" Required="true" RequiredError="Code is required" MaxLength="10" />
+            <MudTextField @bind-Value="model.Name" Label="Name" Required="true" RequiredError="Name is required" MaxLength="100" />
+            <MudTextField @bind-Value="model.City" Label="City" Required="true" RequiredError="City is required" MaxLength="100" />
+            <MudTextField @bind-Value="model.Region" Label="Region" Required="true" RequiredError="Region is required" MaxLength="100" />
+            <MudTextField @bind-Value="model.Country" Label="Country" Required="true" RequiredError="Country is required" MaxLength="100" />
+            <MudCheckBox @bind-Value="model.IsActive" Label="Active" Color="Color.Primary" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public Branch? Branch { get; set; }
+
+    private Branch model = new();
+    private MudForm form;
+    private bool success;
+
+    protected override void OnInitialized()
+    {
+        if (Branch != null)
+        {
+            // Clone to avoid editing the original instance directly in the list
+            model = new Branch
+            {
+                Id = Branch.Id,
+                Code = Branch.Code,
+                Name = Branch.Name,
+                City = Branch.City,
+                Region = Branch.Region,
+                Country = Branch.Country,
+                IsActive = Branch.IsActive
+            };
+        }
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (success)
+        {
+            try
+            {
+                if (model.Id == 0)
+                {
+                    await BranchService.CreateAsync(model);
+                    Snackbar.Add("Branch created", Severity.Success);
+                }
+                else
+                {
+                    await BranchService.UpdateAsync(model);
+                    Snackbar.Add("Branch updated", Severity.Success);
+                }
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

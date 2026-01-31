@@ -5,6 +5,7 @@ using MetalFlowSystemV2.Data;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,23 +15,30 @@ builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents()
     .AddAuthenticationStateSerialization();
 
+builder.Services.AddMudServices();
+
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 
-builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultScheme = IdentityConstants.ApplicationScheme;
-        options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
-    })
-    .AddIdentityCookies();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.BranchAdminService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.ProductionAreaAdminService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.ShiftAdminService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.TruckAdminService>();
+
+// Remove AddAuthentication and AddIdentityCookies here because AddIdentity adds them.
+// But we might need to configure cookies.
+// The issue "Scheme already exists: Identity.Application" suggests AddIdentity adds it, and AddAuthentication adds it again.
+// AddIdentity adds cookie authentication.
+// We should check what AddIdentityCore vs AddIdentity does.
+// AddIdentity adds the default cookie schemes.
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlite(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddIdentityCore<ApplicationUser>(options =>
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
         options.SignIn.RequireConfirmedAccount = true;
         options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
@@ -68,5 +76,11 @@ app.MapRazorComponents<App>()
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
+// Seed Database
+using (var scope = app.Services.CreateScope())
+{
+    await MetalFlowSystemV2.Data.Seed.DbInitializer.Initialize(scope.ServiceProvider);
+}
 
 app.Run();
