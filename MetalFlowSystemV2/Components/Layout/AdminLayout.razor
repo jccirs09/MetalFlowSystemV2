@@ -1,4 +1,3 @@
-@inherits LayoutComponentBase
 @using MudBlazor
 @using MetalFlowSystemV2.Client
 
@@ -19,12 +18,13 @@
     </MudDrawer>
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.Large" Class="my-4 pt-4">
-            @Body
+            @ChildContent
         </MudContainer>
     </MudMainContent>
 </MudLayout>
 
 @code {
+    [Parameter] public RenderFragment ChildContent { get; set; } = default!;
     bool _drawerOpen = true;
 
     void DrawerToggle()
