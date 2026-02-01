@@ -1,0 +1,130 @@
+@page "/admin/items"
+@layout EmptyLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@inject ItemService ItemService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">Item Master</MudText>
+
+    <MudTable Items="_items" Hover="true" Loading="_loading" Filter="new Func<Item,bool>(FilterFunc)">
+        <ToolBarContent>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">Create Item</MudButton>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Item Code</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>Parent Item</MudTh>
+            <MudTh>Active</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.ItemCode</MudTd>
+            <MudTd DataLabel="Description">@context.Description</MudTd>
+            <MudTd DataLabel="Type">
+                @if (context.Type == ItemType.Coil) { <MudChip T="string" Color="Color.Info" Size="Size.Small">Coil</MudChip> }
+                else if (context.Type == ItemType.Sheet) { <MudChip T="string" Color="Color.Success" Size="Size.Small">Sheet</MudChip> }
+                else { <MudChip T="string" Color="Color.Default" Size="Size.Small">Other</MudChip> }
+            </MudTd>
+            <MudTd DataLabel="Parent">
+                @if (context.ParentItem != null)
+                {
+                    <MudText Typo="Typo.body2">@context.ParentItem.ItemCode</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Active">
+                @if (!context.IsActive) { <MudIcon Icon="@Icons.Material.Filled.Block" Color="Color.Error" /> }
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDialog(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteItem(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</AdminLayout>
+
+@code {
+    private List<Item> _items = new();
+    private bool _loading = true;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _items = await ItemService.GetAllAsync();
+        _loading = false;
+    }
+
+    private bool FilterFunc(Item item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        if (item.ItemCode.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
+        if (item.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ItemDialog>("Create Item", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task OpenEditDialog(Item item)
+    {
+        // Clone for edit to avoid tracking issues if we modify directly
+        // Usually safe to pass reference if we reload or if context tracking is handled.
+        // But for safety:
+        var parameters = new DialogParameters { ["Item"] = item };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ItemDialog>("Edit Item", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task DeleteItem(Item item)
+    {
+        var parameters = new DialogParameters { ["ContentText"] = $"Are you sure you want to delete {item.ItemCode}?" };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Item", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                await ItemService.DeleteAsync(item.Id);
+                await LoadData();
+                Snackbar.Add("Item deleted", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

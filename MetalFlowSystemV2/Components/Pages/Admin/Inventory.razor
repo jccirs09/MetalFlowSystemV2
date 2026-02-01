@@ -1,0 +1,132 @@
+@page "/admin/inventory"
+@layout EmptyLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@inject InventoryService InventoryService
+@inject BranchAdminService BranchService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">Inventory Management</MudText>
+
+    <MudGrid Class="mb-4 align-center">
+        <MudItem xs="4">
+             <MudSelect T="int" Label="Filter by Branch" Value="@_selectedBranchId" ValueChanged="OnBranchChanged" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var branch in _branches)
+                {
+                    <MudSelectItem Value="@branch.Id">@branch.Code - @branch.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="8" Class="d-flex justify-end">
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.CloudUpload" OnClick="OpenImportDialog">Import Snapshot</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <MudTable Items="_stock" Hover="true" Loading="_loading" Filter="new Func<InventoryStock,bool>(FilterFunc)">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Current Stock</MudText>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Item Code</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>Parent</MudTh>
+            <MudTh>Location</MudTh>
+            <MudTh>Qty (Sheet)</MudTh>
+            <MudTh>Weight (Coil)</MudTh>
+            <MudTh>Last Updated</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Item Code">@context.Item?.ItemCode</MudTd>
+            <MudTd DataLabel="Description">@context.Item?.Description</MudTd>
+            <MudTd DataLabel="Type">@context.Item?.Type</MudTd>
+            <MudTd DataLabel="Parent">@context.Item?.ParentItem?.ItemCode</MudTd>
+            <MudTd DataLabel="Location">@context.LocationCode</MudTd>
+            <MudTd DataLabel="Qty">
+                @if (context.QuantityOnHand.HasValue)
+                {
+                    @context.QuantityOnHand
+                }
+            </MudTd>
+            <MudTd DataLabel="Weight">
+                 @if (context.WeightOnHand.HasValue)
+                {
+                    @($"{context.WeightOnHand:N2} lbs")
+                }
+            </MudTd>
+            <MudTd DataLabel="Updated">@context.LastUpdatedAt.ToLocalTime()</MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</AdminLayout>
+
+@code {
+    private List<InventoryStock> _stock = new();
+    private List<Branch> _branches = new();
+    private int _selectedBranchId;
+    private bool _loading = false;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _branches = await BranchService.GetAllAsync();
+        if (_branches.Any())
+        {
+            _selectedBranchId = _branches.First().Id;
+            await LoadData();
+        }
+    }
+
+    private async Task OnBranchChanged(int branchId)
+    {
+        _selectedBranchId = branchId;
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _stock = await InventoryService.GetActiveStockByBranchAsync(_selectedBranchId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading inventory: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool FilterFunc(InventoryStock stock)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        if (stock.Item?.ItemCode.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (stock.Item?.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (stock.LocationCode.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
+        return false;
+    }
+
+    private async Task OpenImportDialog()
+    {
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<InventoryImportDialog>("Import Inventory Snapshot", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+}
