@@ -1,3 +1,4 @@
+using MetalFlowSystemV2.Data.Entities;
 using Microsoft.AspNetCore.Identity;
 
 namespace MetalFlowSystemV2.Data
@@ -6,6 +7,6 @@ namespace MetalFlowSystemV2.Data
     public class ApplicationUser : IdentityUser
     {
         public string? FullName { get; set; }
+        public ICollection<UserBranch> UserBranches { get; set; } = new List<UserBranch>();
     }
-
 }

@@ -2,16 +2,17 @@
 @layout EmptyLayout
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "Admin")]
-@using Microsoft.EntityFrameworkCore
-@using Microsoft.AspNetCore.Identity
 @using MetalFlowSystemV2.Data
+@using MetalFlowSystemV2.Data.Services.Admin
 @using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
-@inject UserManager<ApplicationUser> UserManager
+@inject UserAdminService UserService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
 <AdminLayout>
     <MudText Typo="Typo.h5" Class="mb-4">User Management</MudText>
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Class="mb-4">Create User</MudButton>
 
     <MudTable Items="_users" Hover="true" Loading="_loading">
         <HeaderContent>
@@ -43,7 +44,7 @@
         _loading = true;
         try
         {
-            _users = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(UserManager.Users);
+            _users = await UserService.GetAllUsersAsync();
         }
         catch (Exception ex)
         {
@@ -55,10 +56,22 @@
         }
     }
 
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserDialog>("Create User", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+
     private async Task OpenEditDialog(ApplicationUser user)
     {
         var parameters = new DialogParameters { ["User"] = user };
-        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
         var dialog = await DialogService.ShowAsync<UserDialog>("Edit User", parameters, options);
         var result = await dialog.Result;
 
