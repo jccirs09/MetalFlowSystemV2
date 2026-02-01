@@ -1,6 +1,6 @@
 @page "/admin/shifts"
 @layout EmptyLayout
-@rendermode InteractiveServer
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data.Entities
 @using MetalFlowSystemV2.Data.Services.Admin
