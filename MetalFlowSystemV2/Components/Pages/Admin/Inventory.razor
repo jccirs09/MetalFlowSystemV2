@@ -1,0 +1,97 @@
+@page "/admin/inventory"
+@layout EmptyLayout
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@attribute [Authorize(Roles = "Admin")]
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@inject InventoryService InventoryService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">Inventory Management</MudText>
+
+    <MudStack Row="true" Class="mb-4">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="OpenImportDialog">Import Snapshot</MudButton>
+    </MudStack>
+
+    <MudTable Items="_inventory" Hover="true" Loading="_loading" Filter="new Func<InventoryStock,bool>(FilterFunc)">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Current Stock</MudText>
+            <MudSpacer />
+            <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Branch</MudTh>
+            <MudTh>Item Code</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>Location</MudTh>
+            <MudTh>Qty (Pcs)</MudTh>
+            <MudTh>Weight</MudTh>
+            <MudTh>Updated</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Branch">@context.Branch?.Code</MudTd>
+            <MudTd DataLabel="Item Code">@context.Item?.ItemCode</MudTd>
+            <MudTd DataLabel="Description">@context.Item?.Description</MudTd>
+            <MudTd DataLabel="Location">@context.LocationCode</MudTd>
+            <MudTd DataLabel="Qty">@context.QuantityOnHand</MudTd>
+            <MudTd DataLabel="Weight">@context.WeightOnHand</MudTd>
+            <MudTd DataLabel="Updated">@context.LastUpdatedAt.ToLocalTime().ToString("g")</MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</AdminLayout>
+
+@code {
+    private List<InventoryStock> _inventory = new();
+    private bool _loading = true;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _inventory = await InventoryService.GetAllActiveAsync();
+        }
+        catch (Exception ex)
+        {
+             Snackbar.Add($"Error loading inventory: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool FilterFunc(InventoryStock stock)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        if (stock.Item?.ItemCode.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (stock.Item?.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (stock.LocationCode.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (stock.Branch?.Code.Contains(_searchString, StringComparison.OrdinalIgnoreCase) == true) return true;
+        return false;
+    }
+
+    private async Task OpenImportDialog()
+    {
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<InventorySnapshotDialog>("Import Inventory Snapshot", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+}

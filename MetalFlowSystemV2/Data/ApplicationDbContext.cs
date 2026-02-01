@@ -11,10 +11,21 @@ namespace MetalFlowSystemV2.Data
         public DbSet<Shift> Shifts { get; set; }
         public DbSet<Truck> Trucks { get; set; }
         public DbSet<UserBranch> UserBranches { get; set; }
+        public DbSet<Item> Items { get; set; }
+        public DbSet<InventoryStock> InventoryStocks { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            // Item Code Unique
+            builder.Entity<Item>()
+                .HasIndex(i => i.ItemCode)
+                .IsUnique();
+
+            // InventoryStock Indexes (Optimization)
+            builder.Entity<InventoryStock>()
+                .HasIndex(s => new { s.BranchId, s.IsActive });
 
             // UserBranch Unique Constraint (One Role per Branch per User)
             builder.Entity<UserBranch>()

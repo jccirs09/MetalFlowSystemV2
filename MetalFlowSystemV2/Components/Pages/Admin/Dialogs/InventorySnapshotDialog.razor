@@ -1,0 +1,137 @@
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Data.Entities
+@inject InventorySnapshotImportService ImportService
+@inject BranchAdminService BranchService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            Upload an Excel file (.xlsx) containing Inventory Snapshot data.
+            <br />
+            Required headers: <b>Item ID</b>, <b>Description</b>, <b>Snapshot Loc</b>, <b>Snapshot</b>.
+            <br />
+            <MudText Color="Color.Warning" Typo="Typo.caption">Warning: This will replace all active inventory for the selected branch.</MudText>
+        </MudText>
+
+        @if (Branches.Count > 1)
+        {
+            <MudSelect T="int?" Label="Select Branch" @bind-Value="SelectedBranchId" Required="true" AnchorOrigin="Origin.BottomCenter" Class="mb-4">
+                @foreach (var branch in Branches)
+                {
+                    <MudSelectItem Value="@((int?)branch.Id)">@branch.Code - @branch.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        else if (Branches.Count == 1)
+        {
+             <MudText Class="mb-4">Branch: <b>@Branches[0].Name</b></MudText>
+        }
+
+        <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles">
+            <ActivatorContent>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.CloudUpload">
+                    Select Snapshot File
+                </MudButton>
+            </ActivatorContent>
+        </MudFileUpload>
+
+        @if (_file != null)
+        {
+            <MudText Typo="Typo.body2" Class="mt-2">Selected: @_file.Name (@(_file.Size / 1024) KB)</MudText>
+        }
+
+        @if (_uploading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-4" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_uploading">Cancel</MudButton>
+        <MudButton Color="Color.Error" OnClick="Submit" Disabled="@(_file == null || _uploading || SelectedBranchId == null)">Import Snapshot</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    private List<Branch> Branches = new();
+    private int? SelectedBranchId;
+    private IBrowserFile? _file;
+    private bool _uploading = false;
+    private const long MaxFileSize = 10 * 1024 * 1024; // 10 MB
+
+    protected override async Task OnInitializedAsync()
+    {
+        Branches = await BranchService.GetAllAsync();
+        if (Branches.Count == 1)
+        {
+            SelectedBranchId = Branches[0].Id;
+        }
+    }
+
+    private void UploadFiles(IBrowserFile file)
+    {
+        _file = file;
+    }
+
+    private async Task Submit()
+    {
+        if (_file == null || SelectedBranchId == null) return;
+
+        _uploading = true;
+        try
+        {
+            // Read to byte array to safely create multiple streams
+            using var stream = _file.OpenReadStream(MaxFileSize);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var fileBytes = ms.ToArray();
+
+            // Validate First (use one stream)
+            using (var validateStream = new MemoryStream(fileBytes))
+            {
+                var validResult = await ImportService.ValidateSnapshotAsync(validateStream, _file.Name);
+                if (!validResult.Success)
+                {
+                    foreach (var err in validResult.Errors)
+                    {
+                        Snackbar.Add(err, Severity.Error);
+                    }
+                    return;
+                }
+            }
+
+            // Import (use fresh stream)
+            using (var importStream = new MemoryStream(fileBytes))
+            {
+                var result = await ImportService.ImportSnapshotAsync(SelectedBranchId.Value, importStream, _file.Name);
+
+                if (result.Success)
+                {
+                    Snackbar.Add($"Snapshot imported. {result.RowsProcessed} items processed.", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    foreach (var err in result.Errors)
+                    {
+                        Snackbar.Add(err, Severity.Error);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Import failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

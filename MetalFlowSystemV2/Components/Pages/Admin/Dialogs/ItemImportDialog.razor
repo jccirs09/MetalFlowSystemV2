@@ -1,0 +1,80 @@
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject ItemService ItemService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            Upload an Excel file (.xlsx) containing Item Master data.
+            <br />
+            Expected columns: <b>ItemCode</b>, <b>Description</b>, <b>CoilRelationship</b>.
+        </MudText>
+
+        <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles">
+            <ActivatorContent>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.CloudUpload">
+                    Select File
+                </MudButton>
+            </ActivatorContent>
+        </MudFileUpload>
+
+        @if (_file != null)
+        {
+            <MudText Typo="Typo.body2" Class="mt-2">Selected: @_file.Name (@(_file.Size / 1024) KB)</MudText>
+        }
+
+        @if (_uploading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-4" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_uploading">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(_file == null || _uploading)">Import</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    private IBrowserFile? _file;
+    private bool _uploading = false;
+    private const long MaxFileSize = 10 * 1024 * 1024; // 10 MB
+
+    private void UploadFiles(IBrowserFile file)
+    {
+        _file = file;
+    }
+
+    private async Task Submit()
+    {
+        if (_file == null) return;
+
+        _uploading = true;
+        try
+        {
+            using var stream = _file.OpenReadStream(MaxFileSize);
+            // Copy to memory stream because ExcelReader might need seekable stream or synchronous reads
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            await ItemService.ImportItemsAsync(ms);
+
+            Snackbar.Add("Items imported successfully.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Import failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
