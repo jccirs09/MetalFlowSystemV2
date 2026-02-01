@@ -136,8 +136,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                         snapshotVal = val;
                     }
 
-                    if (snapshotVal == 0) continue; // Skip zero quantity/weight? Prompt says "Snapshot values differ...". If 0, assume no stock? Or keep record? Usually keep if it's in snapshot. But let's assume > 0 or keep 0. Let's keep 0 if it's explicitly there. But `if (snapshotVal == 0)` check above. The prompt is silent on zero. I'll include it.
-                    // Wait, if !TryParse, it defaults to 0.
+                    if (snapshotVal == 0) continue;
 
                     if (!itemsCache.TryGetValue(itemCode, out var item))
                     {
@@ -150,11 +149,6 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                             IsActive = false // "Auto-create Item as... IsActive = false"
                         };
                         _context.Items.Add(item);
-                        // We need to save to get ID? Or just add to context and EF handles it.
-                        // EF Core handles generic additions, but dictionary cache needs it.
-                        // We can't easily add to dictionary until saved if we need ID for FK?
-                        // Actually, we can add to context, and EF fixes up FKs if we use the object.
-                        // But for next rows, we need the object.
                         itemsCache[itemCode] = item;
                     }
 
@@ -167,21 +161,28 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                         IsActive = true
                     };
 
+                    // Logic: Sheet = Qty (Int), Coil = Weight (Decimal)
                     if (item.Type == ItemType.Sheet)
                     {
-                        stock.QuantityOnHand = (int)snapshotVal; // Truncate decimal? Snapshot = PCS.
+                        stock.QuantityOnHand = (int)snapshotVal;
                     }
                     else if (item.Type == ItemType.Coil)
                     {
                         stock.WeightOnHand = snapshotVal;
                     }
-                    else // Other
+                    else // Other / Unknown
                     {
-                        // Fallback logic
+                        // Heuristic: If integer, treat as Qty. Else Weight.
+                        // Or if Description contains "Sheet"? No, rely on Type.
+                        // If type is unknown, store based on value precision?
                         if (snapshotVal % 1 == 0)
+                        {
                             stock.QuantityOnHand = (int)snapshotVal;
+                        }
                         else
+                        {
                             stock.WeightOnHand = snapshotVal;
+                        }
                     }
 
                     _context.InventoryStocks.Add(stock);

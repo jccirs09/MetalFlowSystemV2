@@ -12,6 +12,18 @@ namespace MetalFlowSystemV2.Data.Services.Admin
             _context = context;
         }
 
+        public async Task<List<InventoryStock>> GetAllActiveAsync()
+        {
+            return await _context.InventoryStocks
+                .Include(s => s.Branch)
+                .Include(s => s.Item)
+                .ThenInclude(i => i!.ParentItem)
+                .Where(s => s.IsActive)
+                .OrderBy(s => s.Branch!.Code)
+                .ThenBy(s => s.Item!.ItemCode)
+                .ToListAsync();
+        }
+
         public async Task<List<InventoryStock>> GetActiveStockByBranchAsync(int branchId)
         {
             return await _context.InventoryStocks
