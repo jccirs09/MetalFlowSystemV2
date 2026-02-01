@@ -1,0 +1,94 @@
+@page "/admin/system-health"
+@layout EmptyLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject SystemHealthService HealthService
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">System Health</MudText>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_healthData != null)
+    {
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Environment</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudList T="string">
+                            <MudListItem>
+                                <MudText><strong>Environment Name:</strong> @_healthData.EnvironmentName</MudText>
+                            </MudListItem>
+                            <MudListItem>
+                                <MudText><strong>Database Provider:</strong> @_healthData.DatabaseProvider</MudText>
+                            </MudListItem>
+                        </MudList>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Data Statistics</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                         <MudList T="string">
+                            <MudListItem>
+                                <MudText><strong>Branches:</strong> @_healthData.BranchCount</MudText>
+                            </MudListItem>
+                            <MudListItem>
+                                <MudText><strong>Production Areas:</strong> @_healthData.ProductionAreaCount</MudText>
+                            </MudListItem>
+                            <MudListItem>
+                                <MudText><strong>Shifts:</strong> @_healthData.ShiftCount</MudText>
+                            </MudListItem>
+                            <MudListItem>
+                                <MudText><strong>Trucks:</strong> @_healthData.TruckCount</MudText>
+                            </MudListItem>
+                        </MudList>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadData" Class="mt-4">Refresh</MudButton>
+    }
+</AdminLayout>
+
+@code {
+    private SystemHealthData? _healthData;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _healthData = await HealthService.GetSystemHealthAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading system health: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

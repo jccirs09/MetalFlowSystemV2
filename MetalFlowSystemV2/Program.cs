@@ -26,6 +26,11 @@ builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.ProductionAreaA
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.ShiftAdminService>();
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.TruckAdminService>();
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.UserAdminService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.SystemHealthService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.ItemAdminService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.PackingStationAdminService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.InventoryStockAdminService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.InventorySnapshotImportService>();
 
 // Remove AddAuthentication and AddIdentityCookies here because AddIdentity adds them.
 // But we might need to configure cookies.

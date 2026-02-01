@@ -1,0 +1,227 @@
+@page "/admin/inventory"
+@layout EmptyLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@inject InventoryStockAdminService InventoryService
+@inject BranchAdminService BranchService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">Inventory Management</MudText>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect T="int?" Label="Select Branch" @bind-Value="_selectedBranchId" SelectedValuesChanged="LoadData" Clearable="false">
+                @foreach (var branch in _branches)
+                {
+                    <MudSelectItem T="int?" Value="@branch.Id">@branch.Name (@branch.Code)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+             <MudTextField @bind-Value="_searchString" Label="Search Item/Loc" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" OnDebounceIntervalElapsed="LoadData" DebounceInterval="500" Disabled="@(_selectedBranchId == null)" />
+        </MudItem>
+        <MudItem xs="12" sm="12" md="4" Class="d-flex justify-end align-center gap-2">
+             <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.CloudUpload" OnClick="OpenImportDialog" Disabled="@(_selectedBranchId == null)">Import Snapshot</MudButton>
+             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Disabled="@(_selectedBranchId == null)">Add Stock</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    @if (_selectedBranchId == null)
+    {
+        <MudAlert Severity="Severity.Info">Please select a branch to view inventory.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_stocks" Hover="true" Loading="_loading">
+            <HeaderContent>
+                <MudTh>Item Code</MudTh>
+                <MudTh>Description</MudTh>
+                <MudTh>Location</MudTh>
+                <MudTh>Qty (PCS)</MudTh>
+                <MudTh>Weight (LBS)</MudTh>
+                <MudTh>Last Updated</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Item Code">@context.Item?.ItemCode</MudTd>
+                <MudTd DataLabel="Description">@context.Item?.Description</MudTd>
+                <MudTd DataLabel="Location">@context.LocationCode</MudTd>
+                <MudTd DataLabel="Qty">
+                    @if (context.Item?.ItemType == MetalFlowSystemV2.Data.Entities.Enums.ItemType.Coil)
+                    {
+                        <span class="mud-text-secondary">-</span>
+                    }
+                    else
+                    {
+                        @context.QuantityOnHand.ToString("N0")
+                    }
+                </MudTd>
+                <MudTd DataLabel="Weight">
+                    @if (context.Item?.ItemType == MetalFlowSystemV2.Data.Entities.Enums.ItemType.Sheet)
+                    {
+                        <span class="mud-text-secondary">-</span>
+                    }
+                    else
+                    {
+                        @context.WeightOnHand?.ToString("N2")
+                    }
+                </MudTd>
+                <MudTd DataLabel="Last Updated">@context.LastUpdatedAt.ToLocalTime().ToString("g")</MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDialog(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeactivateStock(context))" />
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager />
+            </PagerContent>
+        </MudTable>
+    }
+</AdminLayout>
+
+@code {
+    private List<InventoryStock> _stocks = new();
+    private List<Branch> _branches = new();
+    private int? _selectedBranchId;
+    private string? _searchString;
+    private bool _loading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _branches = await BranchService.GetAllAsync();
+        if (_branches.Any())
+        {
+            _selectedBranchId = _branches.First().Id;
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        if (_selectedBranchId == null) return;
+
+        _loading = true;
+        try
+        {
+            _stocks = await InventoryService.GetByBranchAsync(_selectedBranchId.Value, _searchString);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading inventory: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        if (_selectedBranchId == null) return;
+
+        var newStock = new InventoryStock { BranchId = _selectedBranchId.Value };
+
+        // Pass a new instance.
+        var parameters = new DialogParameters { ["Stock"] = newStock };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<InventoryDialog>("Add Inventory Stock", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            var stock = (InventoryStock)result.Data;
+            try
+            {
+                await InventoryService.UpsertAsync(stock.BranchId, stock.ItemId, stock.LocationCode, stock.QuantityOnHand, stock.WeightOnHand);
+                Snackbar.Add("Stock updated successfully", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error updating stock: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenEditDialog(InventoryStock stock)
+    {
+        // Clone
+        var stockClone = new InventoryStock
+        {
+            Id = stock.Id,
+            BranchId = stock.BranchId,
+            ItemId = stock.ItemId,
+            Item = stock.Item, // Reference is fine for display
+            LocationCode = stock.LocationCode,
+            QuantityOnHand = stock.QuantityOnHand,
+            WeightOnHand = stock.WeightOnHand,
+            LastUpdatedAt = stock.LastUpdatedAt,
+            IsActive = stock.IsActive
+        };
+
+        var parameters = new DialogParameters { ["Stock"] = stockClone };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<InventoryDialog>("Edit Inventory Stock", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            var updatedStock = (InventoryStock)result.Data;
+            try
+            {
+                await InventoryService.UpsertAsync(updatedStock.BranchId, updatedStock.ItemId, updatedStock.LocationCode, updatedStock.QuantityOnHand, updatedStock.WeightOnHand);
+                Snackbar.Add("Stock updated successfully", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                 Snackbar.Add($"Error updating stock: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenImportDialog()
+    {
+        if (_selectedBranchId == null) return;
+
+        var parameters = new DialogParameters { ["BranchId"] = _selectedBranchId.Value };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Small };
+
+        var dialog = await DialogService.ShowAsync<InventoryImportDialog>("Import Inventory Snapshot", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task DeactivateStock(InventoryStock stock)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Warning",
+            "Deactivating this stock will remove it from view. Continue?",
+            yesText:"Deactivate", cancelText:"Cancel");
+
+        if (result == true)
+        {
+            try
+            {
+                await InventoryService.DeactivateAsync(stock.Id);
+                Snackbar.Add("Stock deactivated.", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error deactivating stock: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

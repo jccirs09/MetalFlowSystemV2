@@ -1,0 +1,169 @@
+@page "/admin/items"
+@layout EmptyLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Entities.Enums
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@inject ItemAdminService ItemService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">Item Master</MudText>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudTextField @bind-Value="_searchString" Label="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" OnDebounceIntervalElapsed="LoadData" DebounceInterval="500" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="ItemType?" Label="Type" @bind-Value="_selectedType" Clearable="true" SelectedValuesChanged="LoadData">
+                <MudSelectItem T="ItemType?" Value="ItemType.Coil">Coil</MudSelectItem>
+                <MudSelectItem T="ItemType?" Value="ItemType.Sheet">Sheet</MudSelectItem>
+                <MudSelectItem T="ItemType?" Value="ItemType.Other">Other</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+             <MudCheckBox T="bool" Value="@_showInactive" ValueChanged="OnShowInactiveChanged" Label="Show Inactive" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3" Class="d-flex justify-end align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">Create Item</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <MudTable Items="_items" Hover="true" Loading="_loading">
+        <HeaderContent>
+            <MudTh>Code</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>Parent Coil</MudTh>
+            <MudTh>UOM</MudTh>
+            <MudTh>Category</MudTh>
+            <MudTh>Active</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.ItemCode</MudTd>
+            <MudTd DataLabel="Description">@context.Description</MudTd>
+            <MudTd DataLabel="Type">@context.ItemType</MudTd>
+            <MudTd DataLabel="Parent Coil">
+                @if (context.ParentItem != null)
+                {
+                    @($"{context.ParentItem.ItemCode}")
+                }
+                else
+                {
+                    <span class="mud-text-secondary">-</span>
+                }
+            </MudTd>
+            <MudTd DataLabel="UOM">@context.Uom</MudTd>
+            <MudTd DataLabel="Category">@context.Category</MudTd>
+            <MudTd DataLabel="Active">
+                <MudCheckBox Value="@context.IsActive" ReadOnly="true" Color="Color.Primary" Dense="true" />
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDialog(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</AdminLayout>
+
+@code {
+    private List<Item> _items = new();
+    private bool _loading = true;
+    private string? _searchString;
+    private ItemType? _selectedType;
+    private bool _showInactive = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task OnShowInactiveChanged(bool value)
+    {
+        _showInactive = value;
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            bool? activeFilter = _showInactive ? null : true;
+            _items = await ItemService.GetAllAsync(_searchString, _selectedType, activeFilter);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading items: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ItemDialog>("Create Item", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data != null)
+        {
+            var newItem = (Item)result.Data;
+            try
+            {
+                await ItemService.CreateAsync(newItem);
+                Snackbar.Add("Item created successfully", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error creating item: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenEditDialog(Item item)
+    {
+        // Clone for edit
+        var itemClone = new Item
+        {
+            Id = item.Id,
+            ItemCode = item.ItemCode,
+            Description = item.Description,
+            ItemType = item.ItemType,
+            ParentItemId = item.ParentItemId,
+            Uom = item.Uom,
+            Category = item.Category,
+            WeightPerUnit = item.WeightPerUnit,
+            IsActive = item.IsActive
+        };
+
+        var parameters = new DialogParameters { ["Item"] = itemClone };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ItemDialog>("Edit Item", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data != null)
+        {
+            var updatedItem = (Item)result.Data;
+            try
+            {
+                await ItemService.UpdateAsync(updatedItem);
+                Snackbar.Add("Item updated successfully", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                 Snackbar.Add($"Error updating item: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

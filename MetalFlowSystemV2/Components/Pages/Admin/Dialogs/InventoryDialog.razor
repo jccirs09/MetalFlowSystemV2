@@ -1,0 +1,102 @@
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Entities.Enums
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject ItemAdminService ItemService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" Model="@Stock" @bind-IsValid="@success">
+            @if (Stock.Id == 0)
+            {
+                <MudAutocomplete T="Item" Label="Search Item" Value="Stock.Item" ValueChanged="OnItemChanged"
+                                 SearchFunc="@SearchItems" ToStringFunc="@(i => i == null ? "" : $"{i.ItemCode} - {i.Description}")"
+                                 Required="true" CoerceText="true" ResetValueOnEmptyText="true" />
+            }
+            else
+            {
+                <MudTextField Value="@($"{Stock.Item?.ItemCode} - {Stock.Item?.Description}")" Label="Item" ReadOnly="true" />
+            }
+
+            <MudTextField @bind-Value="Stock.LocationCode" Label="Location Code" MaxLength="50" />
+
+            @if (_isCoil)
+            {
+                 <MudNumericField @bind-Value="Stock.WeightOnHand" Label="Weight (LBS)" Required="true" HideSpinButtons="true" Min="0" />
+                 <MudText Typo="Typo.caption">Coils are tracked by Weight.</MudText>
+            }
+            else if (_isSheet)
+            {
+                 <MudNumericField @bind-Value="Stock.QuantityOnHand" Label="Quantity (PCS)" Required="true" HideSpinButtons="true" Min="0" />
+                 <MudText Typo="Typo.caption">Sheets are tracked by Quantity.</MudText>
+            }
+            else
+            {
+                 @* Other: Allow both or default to Qty *@
+                 <MudNumericField @bind-Value="Stock.QuantityOnHand" Label="Quantity" HideSpinButtons="true" Min="0" />
+                 <MudNumericField @bind-Value="Stock.WeightOnHand" Label="Weight" HideSpinButtons="true" Min="0" />
+            }
+
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(!success || Stock.ItemId == 0)">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public InventoryStock Stock { get; set; } = new();
+
+    private MudForm form;
+    private bool success;
+    private bool _isCoil;
+    private bool _isSheet;
+
+    protected override void OnParametersSet()
+    {
+        UpdateItemTypeFlags();
+    }
+
+    private void UpdateItemTypeFlags()
+    {
+        if (Stock.Item != null)
+        {
+            _isCoil = Stock.Item.ItemType == ItemType.Coil;
+            _isSheet = Stock.Item.ItemType == ItemType.Sheet;
+        }
+    }
+
+    private async Task<IEnumerable<Item>> SearchItems(string value, CancellationToken token)
+    {
+        // Simple search via Service (need to expose search only?)
+        // ItemService.GetAllAsync takes search string.
+        if (string.IsNullOrEmpty(value))
+            return new List<Item>();
+
+        return await ItemService.GetAllAsync(value, null, true); // Search active items
+    }
+
+    private void OnItemChanged(Item item)
+    {
+        Stock.Item = item;
+        Stock.ItemId = item?.Id ?? 0;
+        UpdateItemTypeFlags();
+
+        // Reset values based on type
+        if (_isCoil) { Stock.QuantityOnHand = 0; } // Enforce 0 for coil
+        if (_isSheet) { Stock.WeightOnHand = null; }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await form.Validate();
+        if (form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(Stock));
+        }
+    }
+}
