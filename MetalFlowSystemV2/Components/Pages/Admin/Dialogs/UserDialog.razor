@@ -24,10 +24,10 @@
                 <MudTabPanel Text="Branch Access">
                     <MudGrid Class="mb-4">
                         <MudItem xs="5">
-                            <MudSelect T="int" Label="Branch" @bind-Value="_selectedBranchId" AnchorOrigin="Origin.BottomCenter">
+                            <MudSelect T="int?" Label="Branch" @bind-Value="_selectedBranchId" AnchorOrigin="Origin.BottomCenter">
                                 @foreach (var branch in _allBranches)
                                 {
-                                    <MudSelectItem Value="@branch.Id">@branch.Code - @branch.Name</MudSelectItem>
+                                    <MudSelectItem T="int?" Value="@branch.Id">@branch.Code - @branch.Name</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>
@@ -89,7 +89,7 @@
     private List<UserBranchDto> _branchAssignments = new();
 
     // Selection
-    private int _selectedBranchId;
+    private int? _selectedBranchId;
     private string _selectedRoleId = string.Empty;
 
     protected override async Task OnInitializedAsync()
@@ -117,14 +117,14 @@
 
     private void AddBranchAssignment()
     {
-        if (_selectedBranchId == 0 || string.IsNullOrEmpty(_selectedRoleId))
+        if (_selectedBranchId == null || _selectedBranchId == 0 || string.IsNullOrEmpty(_selectedRoleId))
         {
             Snackbar.Add("Please select both Branch and Role", Severity.Warning);
             return;
         }
 
         // Check if branch already assigned
-        var existing = _branchAssignments.FirstOrDefault(b => b.BranchId == _selectedBranchId);
+        var existing = _branchAssignments.FirstOrDefault(b => b.BranchId == _selectedBranchId.Value);
         if (existing != null)
         {
              // Update role
@@ -135,7 +135,7 @@
         }
         else
         {
-            var branch = _allBranches.FirstOrDefault(b => b.Id == _selectedBranchId);
+            var branch = _allBranches.FirstOrDefault(b => b.Id == _selectedBranchId.Value);
             var role = _allRoles.FirstOrDefault(r => r.Id == _selectedRoleId);
 
             if (branch != null && role != null)

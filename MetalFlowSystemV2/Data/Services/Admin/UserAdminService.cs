@@ -1,3 +1,4 @@
+using MetalFlowSystemV2.Data;
 using MetalFlowSystemV2.Data.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
