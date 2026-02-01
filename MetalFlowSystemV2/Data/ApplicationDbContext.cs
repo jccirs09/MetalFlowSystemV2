@@ -12,6 +12,11 @@ namespace MetalFlowSystemV2.Data
         public DbSet<Truck> Trucks { get; set; }
         public DbSet<UserBranch> UserBranches { get; set; }
 
+        // Phase 1 Entities
+        public DbSet<Item> Items { get; set; }
+        public DbSet<InventoryStock> InventoryStocks { get; set; }
+        public DbSet<PackingStation> PackingStations { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
@@ -41,13 +46,51 @@ namespace MetalFlowSystemV2.Data
                 .HasIndex(t => new { t.BranchId, t.TruckCode })
                 .IsUnique();
 
-            // Truck Capacity Precision (already in Attribute but good to enforce here too or rely on attribute)
-            // The attribute [Column(TypeName = "decimal(12, 2)")] handles it for SQL Server/SQLite usually,
-            // but HasPrecision is cleaner in Fluent API.
-            // SQLite treats all numbers as REAL/NUMERIC/INTEGER, but EF Core handles the rounding.
+            // Truck Capacity Precision
             builder.Entity<Truck>()
                 .Property(t => t.CapacityLbs)
                 .HasPrecision(12, 2);
+
+            // --- Phase 1: Item Master ---
+            builder.Entity<Item>()
+                .HasIndex(i => i.ItemCode)
+                .IsUnique();
+
+            builder.Entity<Item>()
+                .HasOne(i => i.ParentItem)
+                .WithMany(i => i.ChildItems)
+                .HasForeignKey(i => i.ParentItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Item>()
+                .Property(i => i.WeightPerUnit)
+                .HasPrecision(12, 3);
+
+            // --- Phase 1: Inventory Stock ---
+            // Unique Index on (BranchId, ItemId, LocationCode) - Filtered for Active
+            builder.Entity<InventoryStock>()
+                .HasIndex(s => new { s.BranchId, s.ItemId, s.LocationCode })
+                .IsUnique()
+                .HasFilter("[IsActive] = 1");
+
+            builder.Entity<InventoryStock>()
+                .Property(s => s.QuantityOnHand)
+                .HasPrecision(18, 3);
+
+            builder.Entity<InventoryStock>()
+                .Property(s => s.WeightOnHand)
+                .HasPrecision(18, 3);
+
+            // --- Phase 1: Packing Stations ---
+            builder.Entity<PackingStation>()
+                .HasIndex(ps => new { ps.BranchId, ps.StationName })
+                .IsUnique();
+
+            // Unique StationCode per Branch if provided
+            builder.Entity<PackingStation>()
+                .HasIndex(ps => new { ps.BranchId, ps.StationCode })
+                .IsUnique()
+                .HasFilter("[StationCode] IS NOT NULL");
         }
     }
 }

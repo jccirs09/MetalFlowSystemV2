@@ -1,0 +1,156 @@
+@page "/admin/packing-stations"
+@layout EmptyLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@inject PackingStationAdminService StationService
+@inject BranchAdminService BranchService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">Packing Stations</MudText>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect T="int?" Label="Select Branch" @bind-Value="_selectedBranchId" SelectedValuesChanged="LoadData" Clearable="false">
+                @foreach (var branch in _branches)
+                {
+                    <MudSelectItem T="int?" Value="@branch.Id">@branch.Name (@branch.Code)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="8" Class="d-flex justify-end align-center">
+             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Disabled="@(_selectedBranchId == null)">Create Station</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    @if (_selectedBranchId == null)
+    {
+        <MudAlert Severity="Severity.Info">Please select a branch to view packing stations.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_stations" Hover="true" Loading="_loading">
+            <HeaderContent>
+                <MudTh>Name</MudTh>
+                <MudTh>Code</MudTh>
+                <MudTh>Sort Order</MudTh>
+                <MudTh>Active</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Name">@context.StationName</MudTd>
+                <MudTd DataLabel="Code">@context.StationCode</MudTd>
+                <MudTd DataLabel="Sort Order">@context.SortOrder</MudTd>
+                <MudTd DataLabel="Active">
+                    <MudCheckBox Value="@context.IsActive" ReadOnly="true" Color="Color.Primary" Dense="true" />
+                </MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDialog(context))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</AdminLayout>
+
+@code {
+    private List<PackingStation> _stations = new();
+    private List<Branch> _branches = new();
+    private int? _selectedBranchId;
+    private bool _loading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _branches = await BranchService.GetAllAsync();
+        if (_branches.Any())
+        {
+            _selectedBranchId = _branches.First().Id;
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        if (_selectedBranchId == null) return;
+
+        _loading = true;
+        try
+        {
+            _stations = await StationService.GetByBranchAsync(_selectedBranchId.Value);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading stations: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        if (_selectedBranchId == null) return;
+
+        var newStation = new PackingStation { BranchId = _selectedBranchId.Value };
+
+        var parameters = new DialogParameters { ["Station"] = newStation };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<PackingStationDialog>("Create Packing Station", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            var station = (PackingStation)result.Data;
+            try
+            {
+                await StationService.CreateAsync(station);
+                Snackbar.Add("Station created successfully", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error creating station: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenEditDialog(PackingStation station)
+    {
+        // Clone
+        var stationClone = new PackingStation
+        {
+            Id = station.Id,
+            BranchId = station.BranchId,
+            StationName = station.StationName,
+            StationCode = station.StationCode,
+            SortOrder = station.SortOrder,
+            IsActive = station.IsActive
+        };
+
+        var parameters = new DialogParameters { ["Station"] = stationClone };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<PackingStationDialog>("Edit Packing Station", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            var updatedStation = (PackingStation)result.Data;
+            try
+            {
+                await StationService.UpdateAsync(updatedStation);
+                Snackbar.Add("Station updated successfully", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                 Snackbar.Add($"Error updating station: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

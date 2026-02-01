@@ -1,0 +1,79 @@
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Entities.Enums
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject ItemAdminService ItemService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" Model="@Item" @bind-IsValid="@success">
+            <MudTextField @bind-Value="Item.ItemCode" Label="Item Code" Required="true" MaxLength="50" ReadOnly="@(Item.Id > 0)" />
+            <MudTextField @bind-Value="Item.Description" Label="Description" Required="true" MaxLength="200" />
+
+            <MudSelect T="ItemType" Label="Item Type" @bind-Value="Item.ItemType" Required="true" ReadOnly="@(Item.Id > 0 && Item.ItemType == ItemType.Coil && _hasActiveChildren)">
+                <MudSelectItem Value="ItemType.Coil">Coil</MudSelectItem>
+                <MudSelectItem Value="ItemType.Sheet">Sheet</MudSelectItem>
+                <MudSelectItem Value="ItemType.Other">Other</MudSelectItem>
+            </MudSelect>
+
+            @if (Item.ItemType == ItemType.Sheet)
+            {
+                 <MudSelect T="int?" Label="Parent Coil" @bind-Value="Item.ParentItemId" Required="true" ToStringFunc="@(id => _coils.FirstOrDefault(c => c.Id == id)?.ItemCode ?? "Select Coil")">
+                    @foreach (var coil in _coils)
+                    {
+                        <MudSelectItem Value="@((int?)coil.Id)">@coil.ItemCode - @coil.Description</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+
+            <MudTextField @bind-Value="Item.Uom" Label="UOM" MaxLength="20" />
+            <MudTextField @bind-Value="Item.Category" Label="Category" MaxLength="50" />
+
+            <MudNumericField @bind-Value="Item.WeightPerUnit" Label="Weight Per Unit" HideSpinButtons="true" />
+
+            <MudCheckBox @bind-Value="Item.IsActive" Label="Active" Color="Color.Primary" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(!success)">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public Item Item { get; set; } = new();
+
+    private MudForm form;
+    private bool success;
+    private List<Item> _coils = new();
+    private bool _hasActiveChildren = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Clone item if editing to avoid tracking issues, but caller usually handles this or passes untracked entity.
+        // If passed from table, it might be tracked.
+        // Best practice: The page clones it, or we clone it here.
+        // I'll assume the page passes a clone or we work on this instance and only save via Service which attaches/updates.
+        // However, if we edit ItemType in UI, we don't want to affect the list until save.
+
+        // Load Coils for dropdown
+        _coils = await ItemService.GetCoilsAsync();
+
+        if (Item.Id > 0 && Item.ItemType == ItemType.Coil)
+        {
+             _hasActiveChildren = await ItemService.HasActiveChildrenAsync(Item.Id);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await form.Validate();
+        if (form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(Item));
+        }
+    }
+}

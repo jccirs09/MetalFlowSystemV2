@@ -1,0 +1,83 @@
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject InventorySnapshotImportService ImportService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            <strong>WARNING:</strong> This snapshot import will <strong>REPLACE</strong> all current inventory for the selected branch.
+            Existing inventory will be deactivated. This action cannot be undone.
+        </MudAlert>
+
+        <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles">
+            <ActivatorContent>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudUpload">
+                    Select CSV File
+                </MudButton>
+            </ActivatorContent>
+        </MudFileUpload>
+
+        @if (_file != null)
+        {
+            <MudText Class="mt-2">Selected File: @_file.Name</MudText>
+        }
+
+        @if (_processing)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-4" />
+            <MudText Class="mt-2">Processing import... Do not close this dialog.</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="@_processing">Cancel</MudButton>
+        <MudButton Color="Color.Error" OnClick="Submit" Disabled="@(_file == null || _processing)">Import Snapshot</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public int BranchId { get; set; }
+
+    private IBrowserFile? _file;
+    private bool _processing = false;
+
+    private void UploadFiles(IBrowserFile file)
+    {
+        _file = file;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        if (_file == null) return;
+
+        _processing = true;
+        StateHasChanged(); // Force UI update to show progress
+
+        try
+        {
+            // Limit size? 10MB?
+            long maxFileSize = 10 * 1024 * 1024;
+            using var stream = _file.OpenReadStream(maxFileSize);
+
+            // We need to copy to memory stream because the service might need random access or just to be safe with Blazor streams
+            // Actually service uses StreamReader which is fine with Stream.
+            // But Blazor OpenReadStream needs to be consumed.
+
+            await ImportService.ImportSnapshotAsync(BranchId, stream);
+
+            Snackbar.Add("Inventory snapshot imported successfully.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Import failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+}

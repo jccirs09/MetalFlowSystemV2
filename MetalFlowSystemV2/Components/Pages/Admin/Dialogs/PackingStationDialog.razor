@@ -1,0 +1,52 @@
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject BranchAdminService BranchService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" Model="@Station" @bind-IsValid="@success">
+            <MudSelect T="int" Label="Branch" @bind-Value="Station.BranchId" Required="true" ReadOnly="@(Station.Id > 0)">
+                @foreach (var branch in _branches)
+                {
+                    <MudSelectItem Value="@branch.Id">@branch.Name (@branch.Code)</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField @bind-Value="Station.StationName" Label="Station Name" Required="true" MaxLength="100" />
+            <MudTextField @bind-Value="Station.StationCode" Label="Station Code (Optional)" MaxLength="20" />
+            <MudNumericField @bind-Value="Station.SortOrder" Label="Sort Order" />
+
+            <MudCheckBox @bind-Value="Station.IsActive" Label="Active" Color="Color.Primary" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(!success)">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public PackingStation Station { get; set; } = new();
+
+    private MudForm form;
+    private bool success;
+    private List<Branch> _branches = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _branches = await BranchService.GetAllAsync();
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await form.Validate();
+        if (form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(Station));
+        }
+    }
+}
