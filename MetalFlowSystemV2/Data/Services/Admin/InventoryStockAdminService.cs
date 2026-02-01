@@ -31,7 +31,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 .ToListAsync();
         }
 
-        public async Task UpsertAsync(int branchId, int itemId, string? locationCode, decimal qty, decimal? weight)
+        public async Task UpsertAsync(int branchId, int itemId, string? locationCode, decimal qty, decimal? weight, int id = 0)
         {
             // Validate Logic based on Item Type
             var item = await _context.Items.FindAsync(itemId);
@@ -57,18 +57,51 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 throw new Exception("Negative stock not allowed.");
             }
 
-            var existing = await _context.InventoryStocks
-                .FirstOrDefaultAsync(s => s.BranchId == branchId && s.ItemId == itemId && s.LocationCode == locationCode && s.IsActive);
+            InventoryStock? targetStock = null;
 
-            if (existing != null)
+            if (id > 0)
             {
-                existing.QuantityOnHand = qty;
-                existing.WeightOnHand = weight;
-                existing.LastUpdatedAt = DateTime.UtcNow;
-                _context.InventoryStocks.Update(existing);
+                // Updating specific record
+                targetStock = await _context.InventoryStocks.FindAsync(id);
+                if (targetStock == null) throw new Exception("Stock record not found.");
+
+                // Check for conflict: Is there another Active record with same Key but different ID?
+                var conflict = await _context.InventoryStocks
+                    .AnyAsync(s => s.BranchId == branchId
+                                   && s.ItemId == itemId
+                                   && s.LocationCode == locationCode
+                                   && s.IsActive
+                                   && s.Id != id);
+
+                if (conflict)
+                {
+                    throw new Exception($"Stock for this item already exists at location '{locationCode}'.");
+                }
             }
             else
             {
+                // New or Merge
+                targetStock = await _context.InventoryStocks
+                    .FirstOrDefaultAsync(s => s.BranchId == branchId
+                                              && s.ItemId == itemId
+                                              && s.LocationCode == locationCode
+                                              && s.IsActive);
+            }
+
+            if (targetStock != null)
+            {
+                // Update existing
+                targetStock.BranchId = branchId; // Theoretically unchanged but ensures consistency
+                targetStock.ItemId = itemId;
+                targetStock.LocationCode = locationCode;
+                targetStock.QuantityOnHand = qty;
+                targetStock.WeightOnHand = weight;
+                targetStock.LastUpdatedAt = DateTime.UtcNow;
+                _context.InventoryStocks.Update(targetStock);
+            }
+            else
+            {
+                // Create new
                 var newStock = new InventoryStock
                 {
                     BranchId = branchId,

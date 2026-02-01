@@ -138,7 +138,8 @@
             var stock = (InventoryStock)result.Data;
             try
             {
-                await InventoryService.UpsertAsync(stock.BranchId, stock.ItemId, stock.LocationCode, stock.QuantityOnHand, stock.WeightOnHand);
+                // Passing stock.Id = 0 (default) for creation
+                await InventoryService.UpsertAsync(stock.BranchId, stock.ItemId, stock.LocationCode, stock.QuantityOnHand, stock.WeightOnHand, stock.Id);
                 Snackbar.Add("Stock updated successfully", Severity.Success);
                 await LoadData();
             }
@@ -176,7 +177,8 @@
             var updatedStock = (InventoryStock)result.Data;
             try
             {
-                await InventoryService.UpsertAsync(updatedStock.BranchId, updatedStock.ItemId, updatedStock.LocationCode, updatedStock.QuantityOnHand, updatedStock.WeightOnHand);
+                // Passing updatedStock.Id so Upsert knows to update instead of duplicate
+                await InventoryService.UpsertAsync(updatedStock.BranchId, updatedStock.ItemId, updatedStock.LocationCode, updatedStock.QuantityOnHand, updatedStock.WeightOnHand, updatedStock.Id);
                 Snackbar.Add("Stock updated successfully", Severity.Success);
                 await LoadData();
             }

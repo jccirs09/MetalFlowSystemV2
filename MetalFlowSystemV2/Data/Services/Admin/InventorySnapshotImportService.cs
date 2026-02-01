@@ -238,9 +238,27 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 };
 
                 // Parse Value
-                if (parts.Count > valIdx && decimal.TryParse(parts[valIdx], out decimal val))
+                if (parts.Count > valIdx)
                 {
-                    row.SnapshotValue = val;
+                    var valStr = parts[valIdx].Trim();
+                    // Fail on empty/whitespace or non-numeric
+                    if (string.IsNullOrWhiteSpace(valStr))
+                    {
+                         throw new Exception($"Invalid snapshot value (empty) for Item '{row.ItemCode}'.");
+                    }
+
+                    if (decimal.TryParse(valStr, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal val))
+                    {
+                        row.SnapshotValue = val;
+                    }
+                    else
+                    {
+                        throw new Exception($"Invalid numeric snapshot value '{valStr}' for Item '{row.ItemCode}'.");
+                    }
+                }
+                else
+                {
+                     throw new Exception($"Missing snapshot value column for Item '{row.ItemCode}'.");
                 }
 
                 if (!string.IsNullOrEmpty(row.ItemCode))
