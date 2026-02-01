@@ -10,10 +10,16 @@ namespace MetalFlowSystemV2.Data
         public DbSet<ProductionArea> ProductionAreas { get; set; }
         public DbSet<Shift> Shifts { get; set; }
         public DbSet<Truck> Trucks { get; set; }
+        public DbSet<UserBranch> UserBranches { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            // UserBranch Unique Constraint (One Role per Branch per User)
+            builder.Entity<UserBranch>()
+                .HasIndex(ub => new { ub.UserId, ub.BranchId })
+                .IsUnique();
 
             // Branch Code Unique
             builder.Entity<Branch>()

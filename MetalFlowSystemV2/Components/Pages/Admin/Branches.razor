@@ -1,4 +1,6 @@
 @page "/admin/branches"
+@layout EmptyLayout
+@rendermode InteractiveServer
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data.Entities
 @using MetalFlowSystemV2.Data.Services.Admin
@@ -7,34 +9,36 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<MudText Typo="Typo.h5" Class="mb-4">Branches</MudText>
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">Branches</MudText>
 
-<MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Class="mb-4">Create Branch</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Class="mb-4">Create Branch</MudButton>
 
-<MudTable Items="_branches" Hover="true" Loading="_loading">
-    <HeaderContent>
-        <MudTh>Code</MudTh>
-        <MudTh>Name</MudTh>
-        <MudTh>City</MudTh>
-        <MudTh>Region</MudTh>
-        <MudTh>Country</MudTh>
-        <MudTh>Active</MudTh>
-        <MudTh>Actions</MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd DataLabel="Code">@context.Code</MudTd>
-        <MudTd DataLabel="Name">@context.Name</MudTd>
-        <MudTd DataLabel="City">@context.City</MudTd>
-        <MudTd DataLabel="Region">@context.Region</MudTd>
-        <MudTd DataLabel="Country">@context.Country</MudTd>
-        <MudTd DataLabel="Active">
-            <MudCheckBox Value="@context.IsActive" ReadOnly="true" Color="Color.Primary" Dense="true" />
-        </MudTd>
-        <MudTd DataLabel="Actions">
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDialog(context))" />
-        </MudTd>
-    </RowTemplate>
-</MudTable>
+    <MudTable Items="_branches" Hover="true" Loading="_loading">
+        <HeaderContent>
+            <MudTh>Code</MudTh>
+            <MudTh>Name</MudTh>
+            <MudTh>City</MudTh>
+            <MudTh>Region</MudTh>
+            <MudTh>Country</MudTh>
+            <MudTh>Active</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Code">@context.Code</MudTd>
+            <MudTd DataLabel="Name">@context.Name</MudTd>
+            <MudTd DataLabel="City">@context.City</MudTd>
+            <MudTd DataLabel="Region">@context.Region</MudTd>
+            <MudTd DataLabel="Country">@context.Country</MudTd>
+            <MudTd DataLabel="Active">
+                <MudCheckBox Value="@context.IsActive" ReadOnly="true" Color="Color.Primary" Dense="true" />
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDialog(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+</AdminLayout>
 
 @code {
     private List<Branch> _branches = new();

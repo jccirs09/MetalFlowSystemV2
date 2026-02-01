@@ -25,6 +25,7 @@ builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.BranchAdminServ
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.ProductionAreaAdminService>();
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.ShiftAdminService>();
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.TruckAdminService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.UserAdminService>();
 
 // Remove AddAuthentication and AddIdentityCookies here because AddIdentity adds them.
 // But we might need to configure cookies.

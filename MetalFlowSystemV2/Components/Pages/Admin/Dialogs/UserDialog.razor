@@ -1,21 +1,65 @@
 @using Microsoft.AspNetCore.Identity
-@using Microsoft.EntityFrameworkCore
 @using MetalFlowSystemV2.Data
-@inject UserManager<ApplicationUser> UserManager
-@inject RoleManager<IdentityRole> RoleManager
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject UserAdminService UserService
+@inject BranchAdminService BranchService
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
         <MudForm @ref="form" @bind-IsValid="@success">
-            <MudTextField @bind-Value="_email" Label="Email" ReadOnly="true" />
-            <MudTextField @bind-Value="_fullName" Label="Full Name" Required="true" RequiredError="Full Name is required" MaxLength="100" />
+            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                <MudTabPanel Text="User Details">
+                    <MudTextField @bind-Value="_email" Label="Email" Required="true" RequiredError="Email is required" InputType="InputType.Email" ReadOnly="@(_isEditMode)" />
+                    <MudTextField @bind-Value="_fullName" Label="Full Name" Required="true" RequiredError="Full Name is required" MaxLength="100" />
 
-            <MudText Typo="Typo.subtitle1" Class="mt-4">Roles</MudText>
-            @foreach (var role in _allRoles)
-            {
-                <MudCheckBox T="bool" Label="@role" Value="@(_userRoles.Contains(role))" ValueChanged="@((bool v) => UpdateRole(role, v))" Color="Color.Primary" Dense="true" />
-            }
+                    @if (!_isEditMode)
+                    {
+                        <MudTextField @bind-Value="_password" Label="Password" InputType="InputType.Password" Required="true" RequiredError="Password is required" />
+                        <MudTextField @bind-Value="_confirmPassword" Label="Confirm Password" InputType="InputType.Password" Required="true" RequiredError="Confirm Password is required" Validation="@(new Func<string, string?>(PasswordMatch))" />
+                    }
+                </MudTabPanel>
+
+                <MudTabPanel Text="Branch Access">
+                    <MudGrid Class="mb-4">
+                        <MudItem xs="5">
+                            <MudSelect T="int?" Label="Branch" @bind-Value="_selectedBranchId" AnchorOrigin="Origin.BottomCenter">
+                                @foreach (var branch in _allBranches)
+                                {
+                                    <MudSelectItem T="int?" Value="@branch.Id">@branch.Code - @branch.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="5">
+                            <MudSelect T="string" Label="Role" @bind-Value="_selectedRoleId" AnchorOrigin="Origin.BottomCenter">
+                                @foreach (var role in _allRoles)
+                                {
+                                    <MudSelectItem Value="@role.Id">@role.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="2" Class="d-flex align-center">
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="AddBranchAssignment" />
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudTable Items="_branchAssignments" Dense="true" Hover="true" Striped="true">
+                        <HeaderContent>
+                            <MudTh>Branch</MudTh>
+                            <MudTh>Role</MudTh>
+                            <MudTh>Action</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.BranchName</MudTd>
+                            <MudTd>@context.RoleName</MudTd>
+                            <MudTd>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveBranchAssignment(context))" />
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudTabPanel>
+            </MudTabs>
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -25,39 +69,91 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
 
-    [Parameter] public ApplicationUser User { get; set; }
+    [Parameter] public ApplicationUser? User { get; set; }
 
-    private MudForm form;
+    private MudForm form = default!;
     private bool success;
+    private bool _isEditMode;
 
-    // Local model fields to avoid mutating User directly
-    private string _email;
-    private string _fullName;
-    private List<string> _allRoles = new();
-    private HashSet<string> _userRoles = new();
+    // Fields
+    private string _email = string.Empty;
+    private string _fullName = string.Empty;
+    private string _password = string.Empty;
+    private string _confirmPassword = string.Empty;
+
+    // Data
+    private List<Branch> _allBranches = new();
+    private List<IdentityRole> _allRoles = new();
+    private List<UserBranchDto> _branchAssignments = new();
+
+    // Selection
+    private int? _selectedBranchId;
+    private string _selectedRoleId = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
+        _allBranches = await BranchService.GetAllAsync();
+        _allRoles = await UserService.GetAllRolesAsync();
+
         if (User != null)
         {
-            // Copy values to local fields
-            _email = User.Email;
-            _fullName = User.FullName;
+            _isEditMode = true;
+            _email = User.Email ?? "";
+            _fullName = User.FullName ?? "";
 
-            _allRoles = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(RoleManager.Roles.Select(r => r.Name!));
-            var roles = await UserManager.GetRolesAsync(User);
-            _userRoles = new HashSet<string>(roles);
+            // Load assigned branches
+            _branchAssignments = await UserService.GetUserBranchDtosAsync(User.Id);
         }
     }
 
-    private void UpdateRole(string role, bool isSelected)
+    private string? PasswordMatch(string arg)
     {
-        if (isSelected)
-            _userRoles.Add(role);
+        if (_password != arg)
+            return "Passwords do not match";
+        return null;
+    }
+
+    private void AddBranchAssignment()
+    {
+        if (_selectedBranchId == null || _selectedBranchId == 0 || string.IsNullOrEmpty(_selectedRoleId))
+        {
+            Snackbar.Add("Please select both Branch and Role", Severity.Warning);
+            return;
+        }
+
+        // Check if branch already assigned
+        var existing = _branchAssignments.FirstOrDefault(b => b.BranchId == _selectedBranchId.Value);
+        if (existing != null)
+        {
+             // Update role
+             existing.RoleId = _selectedRoleId;
+             var roleName = _allRoles.FirstOrDefault(r => r.Id == _selectedRoleId)?.Name ?? "Unknown";
+             existing.RoleName = roleName;
+             Snackbar.Add("Updated role for existing branch assignment", Severity.Info);
+        }
         else
-            _userRoles.Remove(role);
+        {
+            var branch = _allBranches.FirstOrDefault(b => b.Id == _selectedBranchId.Value);
+            var role = _allRoles.FirstOrDefault(r => r.Id == _selectedRoleId);
+
+            if (branch != null && role != null)
+            {
+                _branchAssignments.Add(new UserBranchDto
+                {
+                    BranchId = branch.Id,
+                    BranchName = branch.Name,
+                    RoleId = role.Id,
+                    RoleName = role.Name ?? "Unknown"
+                });
+            }
+        }
+    }
+
+    private void RemoveBranchAssignment(UserBranchDto dto)
+    {
+        _branchAssignments.Remove(dto);
     }
 
     private async Task Submit()
@@ -68,56 +164,53 @@
         {
             try
             {
-                // Update User Details
-                var user = await UserManager.FindByIdAsync(User.Id);
-                if (user == null)
+                if (_isEditMode && User != null)
                 {
-                    Snackbar.Add("User not found", Severity.Error);
-                    return;
-                }
-
-                user.FullName = _fullName;
-                var result = await UserManager.UpdateAsync(user);
-                if (!result.Succeeded)
-                {
-                    foreach (var error in result.Errors)
-                        Snackbar.Add(error.Description, Severity.Error);
-                    return;
-                }
-
-                // Update Roles
-                var currentRoles = await UserManager.GetRolesAsync(user);
-                var toAdd = _userRoles.Except(currentRoles).ToList();
-                var toRemove = currentRoles.Except(_userRoles).ToList();
-
-                if (toAdd.Any())
-                {
-                    var addResult = await UserManager.AddToRolesAsync(user, toAdd);
-                    if (!addResult.Succeeded)
+                    var userToUpdate = new ApplicationUser
                     {
-                         foreach (var error in addResult.Errors)
+                        Id = User.Id,
+                        Email = _email,
+                        FullName = _fullName
+                    };
+
+                    var result = await UserService.UpdateUserAsync(userToUpdate, _branchAssignments);
+                    if (result.Succeeded)
+                    {
+                        Snackbar.Add("User updated successfully", Severity.Success);
+                        MudDialog.Close(DialogResult.Ok(true));
+                    }
+                    else
+                    {
+                        foreach (var error in result.Errors)
                             Snackbar.Add(error.Description, Severity.Error);
-                         return;
                     }
                 }
-
-                if (toRemove.Any())
+                else
                 {
-                    var removeResult = await UserManager.RemoveFromRolesAsync(user, toRemove);
-                    if (!removeResult.Succeeded)
+                    var newUser = new ApplicationUser
                     {
-                         foreach (var error in removeResult.Errors)
+                        UserName = _email,
+                        Email = _email,
+                        FullName = _fullName,
+                        EmailConfirmed = true // Auto confirm for admin created users
+                    };
+
+                    var (result, createdUser) = await UserService.CreateUserAsync(newUser, _password, _branchAssignments);
+                    if (result.Succeeded)
+                    {
+                        Snackbar.Add("User created successfully", Severity.Success);
+                        MudDialog.Close(DialogResult.Ok(true));
+                    }
+                    else
+                    {
+                         foreach (var error in result.Errors)
                             Snackbar.Add(error.Description, Severity.Error);
-                         return;
                     }
                 }
-
-                Snackbar.Add("User updated", Severity.Success);
-                MudDialog.Close(DialogResult.Ok(true));
             }
             catch (Exception ex)
             {
-                Snackbar.Add(ex.Message, Severity.Error);
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
             }
         }
     }
