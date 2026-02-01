@@ -84,35 +84,42 @@
         _uploading = true;
         try
         {
+            // Read to byte array to safely create multiple streams
             using var stream = _file.OpenReadStream(MaxFileSize);
             using var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
-            ms.Position = 0;
+            var fileBytes = ms.ToArray();
 
-            // Validate First
-            var validResult = await ImportService.ValidateSnapshotAsync(ms, _file.Name);
-            if (!validResult.Success)
+            // Validate First (use one stream)
+            using (var validateStream = new MemoryStream(fileBytes))
             {
-                foreach(var err in validResult.Errors)
+                var validResult = await ImportService.ValidateSnapshotAsync(validateStream, _file.Name);
+                if (!validResult.Success)
                 {
-                    Snackbar.Add(err, Severity.Error);
+                    foreach (var err in validResult.Errors)
+                    {
+                        Snackbar.Add(err, Severity.Error);
+                    }
+                    return;
                 }
-                return;
             }
 
-            ms.Position = 0; // Reset for import
-            var result = await ImportService.ImportSnapshotAsync(SelectedBranchId.Value, ms, _file.Name);
+            // Import (use fresh stream)
+            using (var importStream = new MemoryStream(fileBytes))
+            {
+                var result = await ImportService.ImportSnapshotAsync(SelectedBranchId.Value, importStream, _file.Name);
 
-            if (result.Success)
-            {
-                Snackbar.Add($"Snapshot imported. {result.RowsProcessed} items processed.", Severity.Success);
-                MudDialog.Close(DialogResult.Ok(true));
-            }
-            else
-            {
-                 foreach(var err in result.Errors)
+                if (result.Success)
                 {
-                    Snackbar.Add(err, Severity.Error);
+                    Snackbar.Add($"Snapshot imported. {result.RowsProcessed} items processed.", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    foreach (var err in result.Errors)
+                    {
+                        Snackbar.Add(err, Severity.Error);
+                    }
                 }
             }
         }
