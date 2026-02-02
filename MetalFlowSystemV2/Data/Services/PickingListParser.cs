@@ -27,6 +27,8 @@ namespace MetalFlowSystemV2.Data.Services
         public string OrderQtyUnit { get; set; } = ""; // PCS | LBS
         public decimal WidthIn { get; set; }
         public decimal LengthIn { get; set; }
+        public decimal? LineWeightLbs { get; set; }
+        public bool LineWeightPresent { get; set; }
         public List<ReservedMaterialImportDto> ReservedMaterials { get; set; } = new();
         public string LineInstructions { get; set; } = "";
     }
@@ -161,6 +163,19 @@ namespace MetalFlowSystemV2.Data.Services
                     }
                     else if (line.StartsWith("WIDTH_IN:")) currentLine.WidthIn = ParseDecimal(line);
                     else if (line.StartsWith("LENGTH_IN:")) currentLine.LengthIn = ParseDecimal(line);
+                    else if (line.StartsWith("LINE_WEIGHT_LBS:"))
+                    {
+                        currentLine.LineWeightPresent = true;
+                        var val = ParseString(line);
+                        if (val == "—" || val == "-")
+                        {
+                            currentLine.LineWeightLbs = null;
+                        }
+                        else
+                        {
+                            currentLine.LineWeightLbs = ParseDecimal(line);
+                        }
+                    }
 
                     // Reserved Materials Transition
                     else if (line == "RESERVED_MATERIALS:")

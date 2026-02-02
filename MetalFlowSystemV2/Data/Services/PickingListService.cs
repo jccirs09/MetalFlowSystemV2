@@ -106,6 +106,15 @@ namespace MetalFlowSystemV2.Data.Services
                 result.Errors.Add($"Item Code '{missing}' not found in Item Master.");
             }
 
+            // Check LINE_WEIGHT_LBS presence
+            foreach (var line in result.Dto.Lines)
+            {
+                if (!line.LineWeightPresent)
+                {
+                    result.Errors.Add($"Line {line.LineNumber}: Missing required field 'LINE_WEIGHT_LBS'.");
+                }
+            }
+
             result.IsValid = result.Errors.Count == 0;
             return result;
         }
@@ -175,6 +184,7 @@ namespace MetalFlowSystemV2.Data.Services
                     line.OrderUnit = lineDto.OrderQtyUnit;
                     line.WidthIn = lineDto.WidthIn;
                     line.LengthIn = lineDto.LengthIn;
+                    line.LineWeightLbs = lineDto.LineWeightLbs;
                     line.LineInstructions = lineDto.LineInstructions;
 
                     // Production Area

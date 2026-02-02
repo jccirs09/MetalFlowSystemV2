@@ -59,6 +59,9 @@ namespace MetalFlowSystemV2.Data.Entities
         [Column(TypeName = "decimal(18,2)")]
         public decimal LengthIn { get; set; }
 
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? LineWeightLbs { get; set; }
+
         public string LineInstructions { get; set; }
 
         public int ProductionAreaId { get; set; }

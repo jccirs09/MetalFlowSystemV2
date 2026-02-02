@@ -48,6 +48,7 @@
                         <MudTh>Item</MudTh>
                         <MudTh>Qty</MudTh>
                         <MudTh>Type</MudTh>
+                        <MudTh>Line Wgt</MudTh>
                         <MudTh>Reserved</MudTh>
                         <MudTh>Prod Area</MudTh>
                     </HeaderContent>
@@ -60,6 +61,9 @@
                         <MudTd DataLabel="Qty">@context.OrderQtyValue @context.OrderQtyUnit</MudTd>
                         <MudTd DataLabel="Type">
                              @(context.OrderQtyUnit?.ToUpper() == "PCS" ? "Sheet" : "Coil")
+                        </MudTd>
+                        <MudTd DataLabel="Line Wgt">
+                            @(context.LineWeightLbs.HasValue ? context.LineWeightLbs.Value.ToString("N0") : "—")
                         </MudTd>
                         <MudTd DataLabel="Reserved">
                             @if (context.ReservedMaterials.Any())
