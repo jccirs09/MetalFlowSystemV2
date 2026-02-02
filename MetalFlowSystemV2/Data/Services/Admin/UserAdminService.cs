@@ -58,6 +58,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
             // Assign Branches
             if (branches != null && branches.Any())
             {
+                var roleIds = new HashSet<string>();
                 foreach (var branchDto in branches)
                 {
                     var userBranch = new UserBranch
@@ -67,8 +68,20 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                         RoleId = branchDto.RoleId
                     };
                     _context.UserBranches.Add(userBranch);
+                    roleIds.Add(branchDto.RoleId);
                 }
                 await _context.SaveChangesAsync();
+
+                // Sync Identity Roles
+                var allRoles = await _roleManager.Roles.ToListAsync();
+                foreach (var roleId in roleIds)
+                {
+                    var role = allRoles.FirstOrDefault(r => r.Id == roleId);
+                    if (role != null)
+                    {
+                        await _userManager.AddToRoleAsync(user, role.Name!);
+                    }
+                }
             }
 
             return (IdentityResult.Success, user);
@@ -134,6 +147,34 @@ namespace MetalFlowSystemV2.Data.Services.Admin
             }
 
             await _context.SaveChangesAsync();
+
+            // Sync Identity Roles
+            // 1. Get all roles assigned across all branches
+            var finalUserBranches = await _context.UserBranches.Where(ub => ub.UserId == user.Id).ToListAsync();
+            var targetRoleIds = finalUserBranches.Select(ub => ub.RoleId).Distinct().ToList();
+
+            var allRoles = await _roleManager.Roles.ToListAsync();
+            var targetRoleNames = allRoles.Where(r => targetRoleIds.Contains(r.Id)).Select(r => r.Name!).ToList();
+
+            // 2. Get current Identity Roles
+            var currentIdentityRoles = await _userManager.GetRolesAsync(existingUser);
+
+            // 3. Add missing
+            var toAdd = targetRoleNames.Except(currentIdentityRoles).ToList();
+            if (toAdd.Any())
+            {
+                await _userManager.AddToRolesAsync(existingUser, toAdd);
+            }
+
+            // 4. Remove extra (optional? logic dictates if user loses role in all branches, they lose it globally)
+            var toRemove = currentIdentityRoles.Except(targetRoleNames).ToList();
+            if (toRemove.Any())
+            {
+                // Be careful not to remove "Admin" if it was manually assigned,
+                // but here we assume Roles are driven by Branch Assignments.
+                await _userManager.RemoveFromRolesAsync(existingUser, toRemove);
+            }
+
             return IdentityResult.Success;
         }
 

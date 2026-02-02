@@ -93,7 +93,7 @@
         // Service `GetActiveAssignmentAsync` requires branchId.
         // Let's default to first branch or let user pick.
 
-        if (_branches.Count == 1)
+        if (_branches != null && _branches.Count == 1)
         {
             _selectedBranchId = _branches[0].Id;
             await CheckAssignment();
