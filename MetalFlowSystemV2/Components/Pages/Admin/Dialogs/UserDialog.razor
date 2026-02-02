@@ -1,7 +1,7 @@
-@using Microsoft.AspNetCore.Identity
 @using MetalFlowSystemV2.Data
 @using MetalFlowSystemV2.Data.Entities
 @using MetalFlowSystemV2.Data.Services.Admin
+@using Microsoft.AspNetCore.Identity
 @inject UserAdminService UserService
 @inject BranchAdminService BranchService
 @inject ISnackbar Snackbar
@@ -9,151 +9,124 @@
 <MudDialog>
     <DialogContent>
         <MudForm @ref="form" @bind-IsValid="@success">
-            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
-                <MudTabPanel Text="User Details">
-                    <MudTextField @bind-Value="_email" Label="Email" Required="true" RequiredError="Email is required" InputType="InputType.Email" ReadOnly="@(_isEditMode)" />
-                    <MudTextField @bind-Value="_fullName" Label="Full Name" Required="true" RequiredError="Full Name is required" MaxLength="100" />
+            <MudTextField T="string" Label="Full Name" @bind-Value="user.FullName" Required="true" RequiredError="Full Name is required!" />
+            <MudTextField T="string" Label="Email" @bind-Value="user.Email" Required="true" RequiredError="Email is required!" InputType="InputType.Email" />
 
-                    @if (!_isEditMode)
-                    {
-                        <MudTextField @bind-Value="_password" Label="Password" InputType="InputType.Password" Required="true" RequiredError="Password is required" />
-                        <MudTextField @bind-Value="_confirmPassword" Label="Confirm Password" InputType="InputType.Password" Required="true" RequiredError="Confirm Password is required" Validation="@(new Func<string, string?>(PasswordMatch))" />
-                    }
-                </MudTabPanel>
+            @if (string.IsNullOrEmpty(user.Id))
+            {
+                <MudTextField T="string" Label="Password" @bind-Value="password" Required="true" RequiredError="Password is required!" InputType="InputType.Password" />
+            }
 
-                <MudTabPanel Text="Branch Access">
-                    <MudGrid Class="mb-4">
-                        <MudItem xs="5">
-                            <MudSelect T="int?" Label="Branch" @bind-Value="_selectedBranchId" AnchorOrigin="Origin.BottomCenter">
-                                @foreach (var branch in _allBranches)
-                                {
-                                    <MudSelectItem T="int?" Value="@branch.Id">@branch.Code - @branch.Name</MudSelectItem>
-                                }
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="5">
-                            <MudSelect T="string" Label="Role" @bind-Value="_selectedRoleId" AnchorOrigin="Origin.BottomCenter">
-                                @foreach (var role in _allRoles)
-                                {
-                                    <MudSelectItem Value="@role.Id">@role.Name</MudSelectItem>
-                                }
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="2" Class="d-flex align-center">
-                            <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="AddBranchAssignment" />
-                        </MudItem>
-                    </MudGrid>
+            <MudText Typo="Typo.subtitle1" Class="mt-4">Branch Assignments</MudText>
+            <MudTable Items="@userBranches" Dense="true" Hover="true" Breakpoint="Breakpoint.None" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Branch</MudTh>
+                    <MudTh>Role</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Branch">@context.BranchName</MudTd>
+                    <MudTd DataLabel="Role">@context.RoleName</MudTd>
+                    <MudTd DataLabel="Actions">
+                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveBranch(context))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
 
-                    <MudTable Items="_branchAssignments" Dense="true" Hover="true" Striped="true">
-                        <HeaderContent>
-                            <MudTh>Branch</MudTh>
-                            <MudTh>Role</MudTh>
-                            <MudTh>Action</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd>@context.BranchName</MudTd>
-                            <MudTd>@context.RoleName</MudTd>
-                            <MudTd>
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveBranchAssignment(context))" />
-                            </MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                </MudTabPanel>
-            </MudTabs>
+            <MudGrid Class="mt-2 align-center">
+                <MudItem xs="5">
+                    <MudSelect T="int" Label="Branch" @bind-Value="newBranchId" Strict="true" Dense="true" Margin="Margin.Dense">
+                        @foreach (var branch in allBranches)
+                        {
+                            <MudSelectItem Value="@branch.Id">@branch.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="5">
+                     <MudSelect T="string" Label="Role" @bind-Value="newRoleId" Strict="true" Dense="true" Margin="Margin.Dense">
+                        @foreach (var role in allRoles)
+                        {
+                            <MudSelectItem Value="@role.Id">@role.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="AddBranch" Disabled="@(!CanAddBranch())">Add</MudButton>
+                </MudItem>
+            </MudGrid>
         </MudForm>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Primary" OnClick="Submit">Save</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">@((string.IsNullOrEmpty(user.Id) ? "Create" : "Save"))</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
-    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
 
-    [Parameter] public ApplicationUser? User { get; set; }
+    [Parameter] public ApplicationUser user { get; set; } = new();
 
-    private MudForm form = default!;
+    private MudForm form;
     private bool success;
-    private bool _isEditMode;
+    private string password;
 
-    // Fields
-    private string _email = string.Empty;
-    private string _fullName = string.Empty;
-    private string _password = string.Empty;
-    private string _confirmPassword = string.Empty;
+    // Branch Assignment State
+    private List<UserBranchDto> userBranches = new();
+    private List<Branch> allBranches = new();
+    private List<IdentityRole> allRoles = new();
 
-    // Data
-    private List<Branch> _allBranches = new();
-    private List<IdentityRole> _allRoles = new();
-    private List<UserBranchDto> _branchAssignments = new();
-
-    // Selection
-    private int? _selectedBranchId;
-    private string _selectedRoleId = string.Empty;
+    private int newBranchId;
+    private string newRoleId;
 
     protected override async Task OnInitializedAsync()
     {
-        _allBranches = await BranchService.GetAllAsync();
-        _allRoles = await UserService.GetAllRolesAsync();
-
-        if (User != null)
+        try
         {
-            _isEditMode = true;
-            _email = User.Email ?? "";
-            _fullName = User.FullName ?? "";
+            allBranches = await BranchService.GetAllAsync();
+            allRoles = await UserService.GetAllRolesAsync();
 
-            // Load assigned branches
-            _branchAssignments = await UserService.GetUserBranchDtosAsync(User.Id);
-        }
-    }
-
-    private string? PasswordMatch(string arg)
-    {
-        if (_password != arg)
-            return "Passwords do not match";
-        return null;
-    }
-
-    private void AddBranchAssignment()
-    {
-        if (_selectedBranchId == null || _selectedBranchId == 0 || string.IsNullOrEmpty(_selectedRoleId))
-        {
-            Snackbar.Add("Please select both Branch and Role", Severity.Warning);
-            return;
-        }
-
-        // Check if branch already assigned
-        var existing = _branchAssignments.FirstOrDefault(b => b.BranchId == _selectedBranchId.Value);
-        if (existing != null)
-        {
-             // Update role
-             existing.RoleId = _selectedRoleId;
-             var roleName = _allRoles.FirstOrDefault(r => r.Id == _selectedRoleId)?.Name ?? "Unknown";
-             existing.RoleName = roleName;
-             Snackbar.Add("Updated role for existing branch assignment", Severity.Info);
-        }
-        else
-        {
-            var branch = _allBranches.FirstOrDefault(b => b.Id == _selectedBranchId.Value);
-            var role = _allRoles.FirstOrDefault(r => r.Id == _selectedRoleId);
-
-            if (branch != null && role != null)
+            if (!string.IsNullOrEmpty(user.Id))
             {
-                _branchAssignments.Add(new UserBranchDto
-                {
-                    BranchId = branch.Id,
-                    BranchName = branch.Name,
-                    RoleId = role.Id,
-                    RoleName = role.Name ?? "Unknown"
-                });
+                // Load existing branches
+                userBranches = await UserService.GetUserBranchDtosAsync(user.Id);
             }
         }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
     }
 
-    private void RemoveBranchAssignment(UserBranchDto dto)
+    private bool CanAddBranch()
     {
-        _branchAssignments.Remove(dto);
+        return newBranchId > 0 && !string.IsNullOrEmpty(newRoleId) && !userBranches.Any(ub => ub.BranchId == newBranchId);
+    }
+
+    private void AddBranch()
+    {
+        var branch = allBranches.FirstOrDefault(b => b.Id == newBranchId);
+        var role = allRoles.FirstOrDefault(r => r.Id == newRoleId);
+
+        if (branch != null && role != null)
+        {
+            userBranches.Add(new UserBranchDto
+            {
+                BranchId = branch.Id,
+                BranchName = branch.Name,
+                RoleId = role.Id,
+                RoleName = role.Name
+            });
+
+            // Reset selection
+            newBranchId = 0;
+            newRoleId = "";
+        }
+    }
+
+    private void RemoveBranch(UserBranchDto item)
+    {
+        userBranches.Remove(item);
     }
 
     private async Task Submit()
@@ -162,55 +135,36 @@
 
         if (success)
         {
-            try
+            // If editing, we pass the userBranches list back to be saved
+            if (string.IsNullOrEmpty(user.Id))
             {
-                if (_isEditMode && User != null)
+                var result = await UserService.CreateUserAsync(user, password, userBranches);
+                if (result.Result.Succeeded)
                 {
-                    var userToUpdate = new ApplicationUser
-                    {
-                        Id = User.Id,
-                        Email = _email,
-                        FullName = _fullName
-                    };
-
-                    var result = await UserService.UpdateUserAsync(userToUpdate, _branchAssignments);
-                    if (result.Succeeded)
-                    {
-                        Snackbar.Add("User updated successfully", Severity.Success);
-                        MudDialog.Close(DialogResult.Ok(true));
-                    }
-                    else
-                    {
-                        foreach (var error in result.Errors)
-                            Snackbar.Add(error.Description, Severity.Error);
-                    }
+                    MudDialog.Close(DialogResult.Ok(true));
                 }
                 else
                 {
-                    var newUser = new ApplicationUser
+                    foreach(var error in result.Result.Errors)
                     {
-                        UserName = _email,
-                        Email = _email,
-                        FullName = _fullName,
-                        EmailConfirmed = true // Auto confirm for admin created users
-                    };
-
-                    var (result, createdUser) = await UserService.CreateUserAsync(newUser, _password, _branchAssignments);
-                    if (result.Succeeded)
-                    {
-                        Snackbar.Add("User created successfully", Severity.Success);
-                        MudDialog.Close(DialogResult.Ok(true));
-                    }
-                    else
-                    {
-                         foreach (var error in result.Errors)
-                            Snackbar.Add(error.Description, Severity.Error);
+                         Snackbar.Add(error.Description, Severity.Error);
                     }
                 }
             }
-            catch (Exception ex)
+            else
             {
-                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+                var result = await UserService.UpdateUserAsync(user, userBranches);
+                if (result.Succeeded)
+                {
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                     foreach(var error in result.Errors)
+                    {
+                         Snackbar.Add(error.Description, Severity.Error);
+                    }
+                }
             }
         }
     }

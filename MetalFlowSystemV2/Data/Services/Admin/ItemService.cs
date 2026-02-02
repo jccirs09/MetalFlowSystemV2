@@ -8,16 +8,17 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 {
     public class ItemService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-        public ItemService(ApplicationDbContext context)
+        public ItemService(IDbContextFactory<ApplicationDbContext> contextFactory)
         {
-            _context = context;
+            _contextFactory = contextFactory;
         }
 
         public async Task<List<Item>> GetAllAsync()
         {
-            return await _context.Items
+            using var context = _contextFactory.CreateDbContext();
+            return await context.Items
                 .Include(i => i.ParentItem)
                 .OrderBy(i => i.ItemCode)
                 .ToListAsync();
@@ -25,36 +26,42 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 
         public async Task<Item?> GetByIdAsync(int id)
         {
-            return await _context.Items
+            using var context = _contextFactory.CreateDbContext();
+            return await context.Items
                 .Include(i => i.ParentItem)
                 .FirstOrDefaultAsync(i => i.Id == id);
         }
 
         public async Task CreateAsync(Item item)
         {
-            _context.Items.Add(item);
-            await _context.SaveChangesAsync();
+            using var context = _contextFactory.CreateDbContext();
+            context.Items.Add(item);
+            await context.SaveChangesAsync();
         }
 
         public async Task UpdateAsync(Item item)
         {
-            _context.Items.Update(item);
-            await _context.SaveChangesAsync();
+            using var context = _contextFactory.CreateDbContext();
+            // Attach item if not tracked
+            context.Items.Update(item);
+            await context.SaveChangesAsync();
         }
 
         public async Task DeleteAsync(int id)
         {
-            var item = await _context.Items.FindAsync(id);
+            using var context = _contextFactory.CreateDbContext();
+            var item = await context.Items.FindAsync(id);
             if (item != null)
             {
-                _context.Items.Remove(item);
-                await _context.SaveChangesAsync();
+                context.Items.Remove(item);
+                await context.SaveChangesAsync();
             }
         }
 
         public async Task<List<Item>> GetCoilItemsAsync()
         {
-            return await _context.Items
+            using var context = _contextFactory.CreateDbContext();
+            return await context.Items
                 .Where(i => i.Type == ItemType.Coil)
                 .OrderBy(i => i.ItemCode)
                 .ToListAsync();
@@ -102,14 +109,15 @@ namespace MetalFlowSystemV2.Data.Services.Admin
             }
 
             // Transactional Upsert
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            using var context = await _contextFactory.CreateDbContextAsync();
+            using var transaction = await context.Database.BeginTransactionAsync();
 
             try
             {
                 // Load existing items to memory for lookup (assuming manageable size)
                 // In production with huge datasets, we'd batch this or use checking per item.
                 // Here we fetch all to optimize lookups.
-                var existingItems = await _context.Items.ToDictionaryAsync(i => i.ItemCode, StringComparer.OrdinalIgnoreCase);
+                var existingItems = await context.Items.ToDictionaryAsync(i => i.ItemCode, StringComparer.OrdinalIgnoreCase);
 
                 // Pass 1: Upsert "Coils" (Items with NO parent relationship)
                 // These are treated as Roots.
@@ -133,7 +141,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                             Type = ItemType.Coil,
                             IsActive = true
                         };
-                        _context.Items.Add(newItem);
+                        context.Items.Add(newItem);
                         existingItems[dto.ItemCode] = newItem; // Add to dictionary for subsequent lookups (though ID is 0)
                     }
                 }
@@ -143,7 +151,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 // but here we look up by Code. Dictionary has reference to the object.
                 // We need IDs if we are setting ParentItemId int?. If we set ParentItem object, we don't need IDs yet.
                 // Let's rely on setting the object reference if possible, or save to get IDs.
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
 
                 // Re-fetch dictionary? Or trust the objects in `existingItems` now have IDs?
                 // EF Core populates IDs on the entities in the context after SaveChanges.
@@ -180,12 +188,12 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                             ParentItem = parentItem,
                             IsActive = true
                         };
-                        _context.Items.Add(newItem);
+                        context.Items.Add(newItem);
                         existingItems[dto.ItemCode] = newItem;
                     }
                 }
 
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
                 await transaction.CommitAsync();
             }
             catch

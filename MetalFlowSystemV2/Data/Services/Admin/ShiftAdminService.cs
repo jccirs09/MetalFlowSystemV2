@@ -5,16 +5,17 @@ namespace MetalFlowSystemV2.Data.Services.Admin;
 
 public class ShiftAdminService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-    public ShiftAdminService(ApplicationDbContext context)
+    public ShiftAdminService(IDbContextFactory<ApplicationDbContext> contextFactory)
     {
-        _context = context;
+        _contextFactory = contextFactory;
     }
 
     public async Task<List<Shift>> GetByBranchIdAsync(int branchId)
     {
-        return await _context.Shifts
+        using var context = _contextFactory.CreateDbContext();
+        return await context.Shifts
             .Where(s => s.BranchId == branchId)
             .AsNoTracking()
             .OrderBy(s => s.Code)
@@ -23,25 +24,27 @@ public class ShiftAdminService
 
     public async Task CreateAsync(Shift shift)
     {
+        using var context = _contextFactory.CreateDbContext();
         shift.Code = shift.Code.ToUpperInvariant();
 
-        if (await _context.Shifts.AnyAsync(s => s.BranchId == shift.BranchId && s.Code == shift.Code))
+        if (await context.Shifts.AnyAsync(s => s.BranchId == shift.BranchId && s.Code == shift.Code))
         {
             throw new InvalidOperationException($"Shift code '{shift.Code}' already exists in this branch.");
         }
 
-        _context.Shifts.Add(shift);
-        await _context.SaveChangesAsync();
+        context.Shifts.Add(shift);
+        await context.SaveChangesAsync();
     }
 
     public async Task UpdateAsync(Shift shift)
     {
+        using var context = _contextFactory.CreateDbContext();
         shift.Code = shift.Code.ToUpperInvariant();
 
-        var existing = await _context.Shifts.FindAsync(shift.Id);
+        var existing = await context.Shifts.FindAsync(shift.Id);
         if (existing == null) throw new KeyNotFoundException("Shift not found");
 
-        if (existing.Code != shift.Code && await _context.Shifts.AnyAsync(s => s.BranchId == shift.BranchId && s.Code == shift.Code))
+        if (existing.Code != shift.Code && await context.Shifts.AnyAsync(s => s.BranchId == shift.BranchId && s.Code == shift.Code))
         {
             throw new InvalidOperationException($"Shift code '{shift.Code}' already exists in this branch.");
         }
@@ -53,6 +56,6 @@ public class ShiftAdminService
         existing.CrossesMidnight = shift.CrossesMidnight;
         existing.IsActive = shift.IsActive;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
     }
 }

@@ -5,16 +5,17 @@ namespace MetalFlowSystemV2.Data.Services.Admin;
 
 public class BranchAdminService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-    public BranchAdminService(ApplicationDbContext context)
+    public BranchAdminService(IDbContextFactory<ApplicationDbContext> contextFactory)
     {
-        _context = context;
+        _contextFactory = contextFactory;
     }
 
     public async Task<List<Branch>> GetAllAsync()
     {
-        return await _context.Branches
+        using var context = _contextFactory.CreateDbContext();
+        return await context.Branches
             .AsNoTracking()
             .OrderBy(b => b.Code)
             .ToListAsync();
@@ -22,30 +23,33 @@ public class BranchAdminService
 
     public async Task<Branch?> GetByIdAsync(int id)
     {
-        return await _context.Branches.FindAsync(id);
+        using var context = _contextFactory.CreateDbContext();
+        return await context.Branches.FindAsync(id);
     }
 
     public async Task CreateAsync(Branch branch)
     {
+        using var context = _contextFactory.CreateDbContext();
         branch.Code = branch.Code.ToUpperInvariant();
 
-        if (await _context.Branches.AnyAsync(b => b.Code == branch.Code))
+        if (await context.Branches.AnyAsync(b => b.Code == branch.Code))
         {
             throw new InvalidOperationException($"Branch code '{branch.Code}' already exists.");
         }
 
-        _context.Branches.Add(branch);
-        await _context.SaveChangesAsync();
+        context.Branches.Add(branch);
+        await context.SaveChangesAsync();
     }
 
     public async Task UpdateAsync(Branch branch)
     {
+        using var context = _contextFactory.CreateDbContext();
         branch.Code = branch.Code.ToUpperInvariant();
 
-        var existing = await _context.Branches.FindAsync(branch.Id);
+        var existing = await context.Branches.FindAsync(branch.Id);
         if (existing == null) throw new KeyNotFoundException("Branch not found");
 
-        if (existing.Code != branch.Code && await _context.Branches.AnyAsync(b => b.Code == branch.Code))
+        if (existing.Code != branch.Code && await context.Branches.AnyAsync(b => b.Code == branch.Code))
         {
             throw new InvalidOperationException($"Branch code '{branch.Code}' already exists.");
         }
@@ -58,6 +62,6 @@ public class BranchAdminService
         existing.Country = branch.Country;
         existing.IsActive = branch.IsActive;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
     }
 }

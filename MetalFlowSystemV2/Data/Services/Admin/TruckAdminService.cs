@@ -5,16 +5,17 @@ namespace MetalFlowSystemV2.Data.Services.Admin;
 
 public class TruckAdminService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-    public TruckAdminService(ApplicationDbContext context)
+    public TruckAdminService(IDbContextFactory<ApplicationDbContext> contextFactory)
     {
-        _context = context;
+        _contextFactory = contextFactory;
     }
 
     public async Task<List<Truck>> GetByBranchIdAsync(int branchId)
     {
-        return await _context.Trucks
+        using var context = _contextFactory.CreateDbContext();
+        return await context.Trucks
             .Include(t => t.AssignedDriver)
             .Where(t => t.BranchId == branchId)
             .AsNoTracking()
@@ -24,25 +25,27 @@ public class TruckAdminService
 
     public async Task CreateAsync(Truck truck)
     {
+        using var context = _contextFactory.CreateDbContext();
         truck.TruckCode = truck.TruckCode.ToUpperInvariant();
 
-        if (await _context.Trucks.AnyAsync(t => t.BranchId == truck.BranchId && t.TruckCode == truck.TruckCode))
+        if (await context.Trucks.AnyAsync(t => t.BranchId == truck.BranchId && t.TruckCode == truck.TruckCode))
         {
             throw new InvalidOperationException($"Truck code '{truck.TruckCode}' already exists in this branch.");
         }
 
-        _context.Trucks.Add(truck);
-        await _context.SaveChangesAsync();
+        context.Trucks.Add(truck);
+        await context.SaveChangesAsync();
     }
 
     public async Task UpdateAsync(Truck truck)
     {
+        using var context = _contextFactory.CreateDbContext();
         truck.TruckCode = truck.TruckCode.ToUpperInvariant();
 
-        var existing = await _context.Trucks.FindAsync(truck.Id);
+        var existing = await context.Trucks.FindAsync(truck.Id);
         if (existing == null) throw new KeyNotFoundException("Truck not found");
 
-        if (existing.TruckCode != truck.TruckCode && await _context.Trucks.AnyAsync(t => t.BranchId == truck.BranchId && t.TruckCode == truck.TruckCode))
+        if (existing.TruckCode != truck.TruckCode && await context.Trucks.AnyAsync(t => t.BranchId == truck.BranchId && t.TruckCode == truck.TruckCode))
         {
             throw new InvalidOperationException($"Truck code '{truck.TruckCode}' already exists in this branch.");
         }
@@ -54,6 +57,6 @@ public class TruckAdminService
         existing.AssignedDriverUserId = truck.AssignedDriverUserId;
         existing.IsActive = truck.IsActive;
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
     }
 }

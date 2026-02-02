@@ -18,6 +18,9 @@ namespace MetalFlowSystemV2.Data
     public DbSet<AreaShift> AreaShifts { get; set; }
     public DbSet<StationShift> StationShifts { get; set; }
     public DbSet<ShiftAttendance> ShiftAttendances { get; set; }
+    public DbSet<PickingList> PickingLists { get; set; }
+    public DbSet<PickingListLine> PickingListLines { get; set; }
+    public DbSet<PickingListLineReservedMaterial> PickingListLineReservedMaterials { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -64,6 +67,19 @@ namespace MetalFlowSystemV2.Data
             builder.Entity<Truck>()
                 .Property(t => t.CapacityLbs)
                 .HasPrecision(12, 2);
+
+            // Phase 3: Picking Lists
+            builder.Entity<PickingList>()
+                .HasIndex(pl => new { pl.BranchId, pl.PickingListNumber })
+                .IsUnique();
+
+            builder.Entity<PickingListLine>()
+                .HasIndex(l => new { l.PickingListId, l.LineNumber })
+                .IsUnique();
+
+            builder.Entity<PickingListLineReservedMaterial>()
+                .HasIndex(r => new { r.PickingListLineId, r.TagNumber })
+                .IsUnique();
         }
     }
 }

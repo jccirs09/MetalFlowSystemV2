@@ -32,6 +32,8 @@ builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.InventorySnapsh
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.PackingStationAdminService>();
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.UserWorkAssignmentService>();
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.ShiftInstanceService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.PickingListParser>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.PickingListService>();
 
 // Remove AddAuthentication and AddIdentityCookies here because AddIdentity adds them.
 // But we might need to configure cookies.
@@ -41,8 +43,10 @@ builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.ShiftInstanceService>
 // AddIdentity adds the default cookie schemes.
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
     options.UseSqlite(connectionString));
+builder.Services.AddScoped<ApplicationDbContext>(p =>
+    p.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>

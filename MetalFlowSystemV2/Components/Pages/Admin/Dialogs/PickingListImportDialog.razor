@@ -1,0 +1,193 @@
+@using MetalFlowSystemV2.Data.Services
+@using MetalFlowSystemV2.Data.Entities
+@inject PickingListService PickingListService
+@inject MetalFlowSystemV2.Data.Services.Admin.ProductionAreaAdminService ProductionAreaService
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+
+<MudDialog DisableSidePadding="true">
+    <DialogContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Style="max-height: 80vh; overflow-y: scroll">
+            @if (_step == 1)
+            {
+                <MudText Typo="Typo.h6" GutterBottom="true">Paste Picking List Text</MudText>
+                <MudAlert Severity="Severity.Info" Class="mb-3">Paste the structured output from ChatGPT below.</MudAlert>
+                <MudTextField T="string" Label="Picking List Data" Variant="Variant.Outlined" Lines="15"
+                              @bind-Value="_inputText" Required="true" />
+            }
+            else if (_step == 2)
+            {
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.subtitle1"><strong>Picking List:</strong> @_result.Dto.PickingListNumber</MudText>
+                        <MudText Typo="Typo.subtitle1"><strong>Branch:</strong> @_result.ResolvedBranchName</MudText>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                         <MudText Typo="Typo.subtitle1"><strong>Ship Date:</strong> @_result.Dto.ShipDate?.ToShortDateString()</MudText>
+                         <MudText Typo="Typo.subtitle1"><strong>Customer:</strong> @_result.Dto.SoldTo</MudText>
+                    </MudItem>
+                </MudGrid>
+
+                @if (_result.Errors.Any())
+                {
+                    <MudAlert Severity="Severity.Error" Class="my-3">
+                        <MudText Typo="Typo.subtitle2">Validation Errors:</MudText>
+                        <ul>
+                            @foreach (var err in _result.Errors)
+                            {
+                                <li>@err</li>
+                            }
+                        </ul>
+                        <MudText>Please fix the errors in the source or master data and retry.</MudText>
+                    </MudAlert>
+                }
+
+                <MudTable Items="@_result.Dto.Lines" Dense="true" Hover="true" Class="mt-4" Breakpoint="Breakpoint.None">
+                    <HeaderContent>
+                        <MudTh>Line</MudTh>
+                        <MudTh>Item</MudTh>
+                        <MudTh>Qty</MudTh>
+                        <MudTh>Type</MudTh>
+                        <MudTh>Line Wgt</MudTh>
+                        <MudTh>Reserved</MudTh>
+                        <MudTh>Prod Area</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Line">@context.LineNumber</MudTd>
+                        <MudTd DataLabel="Item">
+                            <MudText Typo="Typo.body2">@context.ItemCode</MudText>
+                            <MudText Typo="Typo.caption">@context.Description</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Qty">@context.OrderQtyValue @context.OrderQtyUnit</MudTd>
+                        <MudTd DataLabel="Type">
+                             @(context.OrderQtyUnit?.ToUpper() == "PCS" ? "Sheet" : "Coil")
+                        </MudTd>
+                        <MudTd DataLabel="Line Wgt">
+                            @(context.LineWeightLbs.HasValue ? context.LineWeightLbs.Value.ToString("N0") : "—")
+                        </MudTd>
+                        <MudTd DataLabel="Reserved">
+                            @if (context.ReservedMaterials.Any())
+                            {
+                                @foreach(var rm in context.ReservedMaterials)
+                                {
+                                    <div style="font-size: 0.75rem">
+                                        <strong>@rm.TagNumber</strong>: @rm.Quantity @rm.Unit
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <span>-</span>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Prod Area">
+                            <MudSelect T="int" Value="@GetPaValue(context.LineNumber)" ValueChanged="@((int v) => SetPaValue(context.LineNumber, v))"
+                                       Label="Area" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                       Required="true" Error="@(GetPaValue(context.LineNumber) == 0)">
+                                <MudSelectItem Value="0">Select...</MudSelectItem>
+                                @foreach (var pa in _productionAreas)
+                                {
+                                    <MudSelectItem Value="@pa.Id">@pa.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        @if (_step == 1)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AnalyzeAsync" Disabled="@string.IsNullOrWhiteSpace(_inputText)">Analyze</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="@(() => _step = 1)">Back</MudButton>
+            <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="ImportAsync"
+                       Disabled="@(!CanImport())">Import</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    private int _step = 1;
+    private string _inputText = "";
+    private PickingListImportResult _result;
+    private List<ProductionArea> _productionAreas = new();
+    private Dictionary<int, int> _linePaMap = new(); // LineNumber -> ProductionAreaId
+
+    private async Task AnalyzeAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (userId == null)
+        {
+            Snackbar.Add("User not identified.", Severity.Error);
+            return;
+        }
+
+        _result = await PickingListService.ValidateAndParseAsync(_inputText, userId);
+
+        if (_result.IsValid || _result.Dto != null) // Even if valid is false, we show errors in Step 2 if DTO exists
+        {
+            if (_result.Dto != null && _result.ResolvedBranchId > 0)
+            {
+                // Load Production Areas
+                _productionAreas = await ProductionAreaService.GetByBranchIdAsync(_result.ResolvedBranchId);
+
+                // Initialize map if needed, or keep existing if retrying?
+                // Reset map to be safe
+                _linePaMap.Clear();
+            }
+            _step = 2;
+        }
+        else
+        {
+             foreach (var err in _result.Errors) Snackbar.Add(err, Severity.Error);
+        }
+    }
+
+    private int GetPaValue(int lineNumber)
+    {
+        if (_linePaMap.TryGetValue(lineNumber, out int val)) return val;
+        return 0;
+    }
+
+    private void SetPaValue(int lineNumber, int value)
+    {
+        if (_linePaMap.ContainsKey(lineNumber)) _linePaMap[lineNumber] = value;
+        else _linePaMap.Add(lineNumber, value);
+    }
+
+    private bool CanImport()
+    {
+        if (_result == null || !_result.IsValid) return false;
+        // Check if all lines have PA assigned
+        foreach (var line in _result.Dto.Lines)
+        {
+            if (GetPaValue(line.LineNumber) == 0) return false;
+        }
+        return true;
+    }
+
+    private async Task ImportAsync()
+    {
+        try
+        {
+            await PickingListService.ImportAsync(_result.Dto, _result.ResolvedBranchId, _linePaMap);
+            Snackbar.Add("Picking List Imported Successfully", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Import failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

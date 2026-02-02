@@ -12,6 +12,9 @@
 @inject ISnackbar Snackbar
 @inject NavigationManager NavManager
 @inject AuthenticationStateProvider AuthStateProvider
+@using MetalFlowSystemV2.Components.Shared
+
+<MudProviders />
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
     <MudCard Elevation="4">
@@ -93,7 +96,7 @@
         // Service `GetActiveAssignmentAsync` requires branchId.
         // Let's default to first branch or let user pick.
 
-        if (_branches.Count == 1)
+        if (_branches != null && _branches.Count == 1)
         {
             _selectedBranchId = _branches[0].Id;
             await CheckAssignment();

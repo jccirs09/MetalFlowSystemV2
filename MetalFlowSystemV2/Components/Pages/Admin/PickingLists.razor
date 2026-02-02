@@ -1,0 +1,130 @@
+@page "/admin/picking-lists"
+@using MetalFlowSystemV2.Components.Layout
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@using MetalFlowSystemV2.Data
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@layout EmptyLayout
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@attribute [Authorize(Roles = "Admin,Supervisor,Planner")]
+@inject PickingListService PickingListService
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+            <MudText Typo="Typo.h4">Picking Lists</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="OpenImportDialog">
+                Import Picking List
+            </MudButton>
+        </MudStack>
+
+        @if (_isLoading)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (_errorMessage != null)
+        {
+             <MudAlert Severity="Severity.Error">@_errorMessage</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="@_pickingLists" Hover="true" Striped="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Number</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Ship Date</MudTh>
+                    <MudTh>Customer</MudTh>
+                    <MudTh>Total Weight (Lbs)</MudTh>
+                    <MudTh>Created</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Number">@context.PickingListNumber</MudTd>
+                    <MudTd DataLabel="Status">
+                        <MudChip T="string" Color="@GetStatusColor(context.Status)" Size="Size.Small">@context.Status</MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Ship Date">@context.ShipDate?.ToShortDateString()</MudTd>
+                    <MudTd DataLabel="Customer">@context.SoldTo</MudTd>
+                    <MudTd DataLabel="Total Weight">@context.TotalWeightLbs.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Created">@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager />
+                </PagerContent>
+            </MudTable>
+        }
+    </MudContainer>
+</AdminLayout>
+
+@code {
+    private List<PickingList> _pickingLists = new();
+    private bool _isLoading = true;
+    private string _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (userId != null)
+            {
+                var branchId = await PickingListService.ResolveBranchAsync(userId);
+                if (branchId != null)
+                {
+                    _pickingLists = await PickingListService.GetPickingLists(DbFactory, branchId.Value).ToListAsync();
+                    _errorMessage = null;
+                }
+                else
+                {
+                    _errorMessage = "Could not resolve active branch. Please select a branch.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error loading data: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OpenImportDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = false, BackdropClick = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = DialogService.Show<PickingListImportDialog>("Import Picking List", options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private Color GetStatusColor(PickingListStatus status)
+    {
+        return status switch
+        {
+            PickingListStatus.Queued => Color.Info,
+            PickingListStatus.Picking => Color.Warning,
+            PickingListStatus.Packed => Color.Primary,
+            PickingListStatus.Shipped => Color.Success,
+            PickingListStatus.Cancelled => Color.Error,
+            _ => Color.Default
+        };
+    }
+}
