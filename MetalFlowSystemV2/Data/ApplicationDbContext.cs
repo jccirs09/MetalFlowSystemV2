@@ -13,6 +13,11 @@ namespace MetalFlowSystemV2.Data
         public DbSet<UserBranch> UserBranches { get; set; }
         public DbSet<Item> Items { get; set; }
         public DbSet<InventoryStock> InventoryStocks { get; set; }
+    public DbSet<PackingStation> PackingStations { get; set; }
+    public DbSet<UserWorkAssignment> UserWorkAssignments { get; set; }
+    public DbSet<AreaShift> AreaShifts { get; set; }
+    public DbSet<StationShift> StationShifts { get; set; }
+    public DbSet<ShiftAttendance> ShiftAttendances { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
