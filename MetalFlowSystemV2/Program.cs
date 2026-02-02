@@ -32,6 +32,8 @@ builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.InventorySnapsh
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.PackingStationAdminService>();
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.Admin.UserWorkAssignmentService>();
 builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.ShiftInstanceService>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.PickingListParser>();
+builder.Services.AddScoped<MetalFlowSystemV2.Data.Services.PickingListService>();
 
 // Remove AddAuthentication and AddIdentityCookies here because AddIdentity adds them.
 // But we might need to configure cookies.

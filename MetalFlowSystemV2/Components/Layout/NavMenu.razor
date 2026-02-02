@@ -28,6 +28,13 @@
         </Authorized>
     </AuthorizeView>
 
+    <AuthorizeView Roles="Admin,Supervisor,Planner">
+        <Authorized>
+             <MudText Typo="Typo.subtitle2" Color="Color.Info" Class="ml-4 mt-2 mb-1">PLANNING</MudText>
+             <MudNavLink Href="admin/picking-lists" Icon="@Icons.Material.Filled.ListAlt">Picking Lists</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
     <AuthorizeView>
         <Authorized>
             <MudNavLink Href="check-in" Icon="@Icons.Material.Filled.CheckCircle" Match="NavLinkMatch.All">Check In</MudNavLink>
