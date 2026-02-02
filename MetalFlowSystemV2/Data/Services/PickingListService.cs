@@ -15,22 +15,21 @@ namespace MetalFlowSystemV2.Data.Services
 
     public class PickingListService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly PickingListParser _parser;
 
-        public PickingListService(ApplicationDbContext context, PickingListParser parser)
+        public PickingListService(IDbContextFactory<ApplicationDbContext> contextFactory, PickingListParser parser)
         {
-            _context = context;
+            _contextFactory = contextFactory;
             _parser = parser;
         }
 
         public async Task<int?> ResolveBranchAsync(string userId)
         {
-            // 1. Check for Active Branch (In a real app, this might be in a SessionService)
-            // For now, we will rely on UserWorkAssignment if active, or UserBranch if single.
+            using var context = _contextFactory.CreateDbContext();
 
             // Check UserWorkAssignment (Active Shift)
-            var activeAssignment = await _context.UserWorkAssignments
+            var activeAssignment = await context.UserWorkAssignments
                 .Include(a => a.Branch)
                 .Where(a => a.UserId == userId && a.IsActive)
                 .FirstOrDefaultAsync();
@@ -41,7 +40,7 @@ namespace MetalFlowSystemV2.Data.Services
             }
 
             // Check UserBranches
-            var userBranches = await _context.UserBranches
+            var userBranches = await context.UserBranches
                 .Include(ub => ub.Branch)
                 .Where(ub => ub.UserId == userId)
                 .ToListAsync();
@@ -51,8 +50,6 @@ namespace MetalFlowSystemV2.Data.Services
                 return userBranches.First().BranchId;
             }
 
-            // Multiple branches and no active assignment -> Block (Return null)
-            // No branches -> Block
             return null;
         }
 
@@ -69,7 +66,8 @@ namespace MetalFlowSystemV2.Data.Services
                 return result;
             }
 
-            var branch = await _context.Branches.FindAsync(branchId);
+            using var context = _contextFactory.CreateDbContext();
+            var branch = await context.Branches.FindAsync(branchId);
             result.ResolvedBranchId = branchId.Value;
             result.ResolvedBranchName = branch.Name;
 
@@ -95,7 +93,7 @@ namespace MetalFlowSystemV2.Data.Services
             // 3. Validation
             // Check Items
             var itemCodes = result.Dto.Lines.Select(l => l.ItemCode).Distinct().ToList();
-            var existingItems = await _context.Items
+            var existingItems = await context.Items
                 .Where(i => itemCodes.Contains(i.ItemCode))
                 .Select(i => i.ItemCode)
                 .ToListAsync();
@@ -121,12 +119,13 @@ namespace MetalFlowSystemV2.Data.Services
 
         public async Task ImportAsync(PickingListImportDto dto, int branchId, Dictionary<int, int> lineProductionAreaMap)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            using var context = await _contextFactory.CreateDbContextAsync();
+            using var transaction = await context.Database.BeginTransactionAsync();
 
             try
             {
                 // 1. Get or Create PickingList
-                var pickingList = await _context.PickingLists
+                var pickingList = await context.PickingLists
                     .Include(pl => pl.Lines)
                     .ThenInclude(l => l.ReservedMaterials)
                     .FirstOrDefaultAsync(pl => pl.BranchId == branchId && pl.PickingListNumber == dto.PickingListNumber);
@@ -138,7 +137,7 @@ namespace MetalFlowSystemV2.Data.Services
                         BranchId = branchId,
                         PickingListNumber = dto.PickingListNumber
                     };
-                    _context.PickingLists.Add(pickingList);
+                    context.PickingLists.Add(pickingList);
                 }
 
                 // Update Header
@@ -153,11 +152,11 @@ namespace MetalFlowSystemV2.Data.Services
                 pickingList.TotalWeightLbs = dto.TotalWeightLbs;
 
                 // Save header to get ID if new
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
 
                 // 2. Process Lines
                 var itemCodes = dto.Lines.Select(l => l.ItemCode).Distinct().ToList();
-                var items = await _context.Items.Where(i => itemCodes.Contains(i.ItemCode)).ToDictionaryAsync(i => i.ItemCode, i => i.Id);
+                var items = await context.Items.Where(i => itemCodes.Contains(i.ItemCode)).ToDictionaryAsync(i => i.ItemCode, i => i.Id);
 
                 foreach (var lineDto in dto.Lines)
                 {
@@ -169,7 +168,7 @@ namespace MetalFlowSystemV2.Data.Services
                             PickingListId = pickingList.Id,
                             LineNumber = lineDto.LineNumber
                         };
-                        _context.PickingListLines.Add(line);
+                        context.PickingListLines.Add(line);
                         pickingList.Lines.Add(line); // Ensure it's in the collection for next iteration if needed
                     }
 
@@ -202,16 +201,6 @@ namespace MetalFlowSystemV2.Data.Services
                     line.LineType = lineDto.OrderQtyUnit.ToUpper() == "PCS" ? PickingListLineType.Sheet : PickingListLineType.Coil;
 
                     // 3. Reserved Materials
-                    // Replace strategy: Remove all existing for this line, insert new
-                    // Since we might have just created the line, check if it has ID.
-                    // If it's new (Id=0), ReservedMaterials is empty.
-                    // If existing, we need to clear.
-
-                    // Need to save lines first to get Line IDs?
-                    // EF Core handles graph updates if we modify the collection.
-
-                    // If line is tracked, we can modify collection.
-                    // line.ReservedMaterials might be null if not included, but we included it in query.
                     if (line.ReservedMaterials == null) line.ReservedMaterials = new List<PickingListLineReservedMaterial>();
 
                     line.ReservedMaterials.Clear(); // Delete existing
@@ -230,7 +219,7 @@ namespace MetalFlowSystemV2.Data.Services
                     }
                 }
 
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
                 await transaction.CommitAsync();
             }
             catch
@@ -240,9 +229,10 @@ namespace MetalFlowSystemV2.Data.Services
             }
         }
 
-        public IQueryable<PickingList> GetPickingLists(int branchId)
+        public IQueryable<PickingList> GetPickingLists(IDbContextFactory<ApplicationDbContext> factory, int branchId)
         {
-            return _context.PickingLists
+            var context = factory.CreateDbContext();
+            return context.PickingLists
                 .Where(pl => pl.BranchId == branchId)
                 .OrderByDescending(pl => pl.CreatedAt);
         }

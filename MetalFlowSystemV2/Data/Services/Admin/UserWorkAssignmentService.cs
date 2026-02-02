@@ -5,16 +5,17 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 {
     public class UserWorkAssignmentService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-        public UserWorkAssignmentService(ApplicationDbContext context)
+        public UserWorkAssignmentService(IDbContextFactory<ApplicationDbContext> contextFactory)
         {
-            _context = context;
+            _contextFactory = contextFactory;
         }
 
         public async Task<List<UserWorkAssignment>> GetByBranchAsync(int branchId)
         {
-            return await _context.UserWorkAssignments
+            using var context = _contextFactory.CreateDbContext();
+            return await context.UserWorkAssignments
                 .Include(a => a.User)
                 .Include(a => a.ShiftTemplate)
                 .Include(a => a.ProductionArea)
@@ -27,38 +28,44 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 
         public async Task<UserWorkAssignment?> GetActiveAssignmentAsync(string userId, int branchId)
         {
-            return await _context.UserWorkAssignments
+            using var context = _contextFactory.CreateDbContext();
+            return await context.UserWorkAssignments
                 .Include(a => a.ShiftTemplate)
                 .Include(a => a.ProductionArea)
                 .Include(a => a.PackingStation)
+                .Include(a => a.Branch) // Ensure branch is loaded for display in CheckIn
                 .FirstOrDefaultAsync(a => a.UserId == userId && a.BranchId == branchId && a.IsActive);
         }
 
         public async Task CreateAsync(UserWorkAssignment assignment)
         {
-            await ValidateAssignmentAsync(assignment);
+            using var context = _contextFactory.CreateDbContext();
+            await ValidateAssignmentAsync(context, assignment);
 
             // Deactivate any existing active assignment for this user/branch
-            var existing = await GetActiveAssignmentAsync(assignment.UserId, assignment.BranchId);
+            var existing = await context.UserWorkAssignments
+                .FirstOrDefaultAsync(a => a.UserId == assignment.UserId && a.BranchId == assignment.BranchId && a.IsActive);
+
             if (existing != null)
             {
                 existing.IsActive = false;
-                _context.UserWorkAssignments.Update(existing);
+                context.UserWorkAssignments.Update(existing);
             }
 
             assignment.CreatedAt = DateTime.UtcNow;
             assignment.UpdatedAt = DateTime.UtcNow;
             assignment.IsActive = true;
 
-            _context.UserWorkAssignments.Add(assignment);
-            await _context.SaveChangesAsync();
+            context.UserWorkAssignments.Add(assignment);
+            await context.SaveChangesAsync();
         }
 
         public async Task UpdateAsync(UserWorkAssignment assignment)
         {
-            await ValidateAssignmentAsync(assignment);
+            using var context = _contextFactory.CreateDbContext();
+            await ValidateAssignmentAsync(context, assignment);
 
-            var existing = await _context.UserWorkAssignments.FindAsync(assignment.Id);
+            var existing = await context.UserWorkAssignments.FindAsync(assignment.Id);
             if (existing == null) throw new KeyNotFoundException("Assignment not found");
 
             existing.ShiftTemplateId = assignment.ShiftTemplateId;
@@ -69,21 +76,22 @@ namespace MetalFlowSystemV2.Data.Services.Admin
             existing.IsActive = assignment.IsActive;
             existing.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
         }
 
         public async Task DeactivateAsync(int id)
         {
-            var assignment = await _context.UserWorkAssignments.FindAsync(id);
+            using var context = _contextFactory.CreateDbContext();
+            var assignment = await context.UserWorkAssignments.FindAsync(id);
             if (assignment != null)
             {
                 assignment.IsActive = false;
                 assignment.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
             }
         }
 
-        private async Task ValidateAssignmentAsync(UserWorkAssignment assignment)
+        private async Task ValidateAssignmentAsync(ApplicationDbContext context, UserWorkAssignment assignment)
         {
             // XOR Check
             if (assignment.WorkMode == WorkMode.ProductionArea)
@@ -92,7 +100,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                     throw new InvalidOperationException("Production Area must be selected for Production Mode.");
 
                 // Verify Branch Match
-                var area = await _context.ProductionAreas.FindAsync(assignment.ProductionAreaId);
+                var area = await context.ProductionAreas.FindAsync(assignment.ProductionAreaId);
                 if (area == null || area.BranchId != assignment.BranchId)
                     throw new InvalidOperationException("Invalid Production Area for this branch.");
             }
@@ -101,13 +109,13 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 if (assignment.PackingStationId == null || assignment.ProductionAreaId != null)
                     throw new InvalidOperationException("Packing Station must be selected for Packing Mode.");
 
-                var station = await _context.PackingStations.FindAsync(assignment.PackingStationId);
+                var station = await context.PackingStations.FindAsync(assignment.PackingStationId);
                 if (station == null || station.BranchId != assignment.BranchId)
                     throw new InvalidOperationException("Invalid Packing Station for this branch.");
             }
 
             // Verify Shift
-            var shift = await _context.Shifts.FindAsync(assignment.ShiftTemplateId);
+            var shift = await context.Shifts.FindAsync(assignment.ShiftTemplateId);
             if (shift == null || shift.BranchId != assignment.BranchId || !shift.IsActive)
                 throw new InvalidOperationException("Invalid or inactive Shift Template.");
         }

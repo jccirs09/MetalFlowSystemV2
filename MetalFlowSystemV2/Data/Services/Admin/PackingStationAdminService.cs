@@ -5,16 +5,17 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 {
     public class PackingStationAdminService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-        public PackingStationAdminService(ApplicationDbContext context)
+        public PackingStationAdminService(IDbContextFactory<ApplicationDbContext> contextFactory)
         {
-            _context = context;
+            _contextFactory = contextFactory;
         }
 
         public async Task<List<PackingStation>> GetByBranchIdAsync(int branchId)
         {
-            return await _context.PackingStations
+            using var context = _contextFactory.CreateDbContext();
+            return await context.PackingStations
                 .Where(p => p.BranchId == branchId)
                 .OrderBy(p => p.Code)
                 .AsNoTracking()
@@ -23,25 +24,27 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 
         public async Task CreateAsync(PackingStation station)
         {
+            using var context = _contextFactory.CreateDbContext();
             station.Code = station.Code.ToUpperInvariant();
 
-            if (await _context.PackingStations.AnyAsync(p => p.BranchId == station.BranchId && p.Code == station.Code))
+            if (await context.PackingStations.AnyAsync(p => p.BranchId == station.BranchId && p.Code == station.Code))
             {
                 throw new InvalidOperationException($"Packing Station code '{station.Code}' already exists in this branch.");
             }
 
-            _context.PackingStations.Add(station);
-            await _context.SaveChangesAsync();
+            context.PackingStations.Add(station);
+            await context.SaveChangesAsync();
         }
 
         public async Task UpdateAsync(PackingStation station)
         {
+            using var context = _contextFactory.CreateDbContext();
             station.Code = station.Code.ToUpperInvariant();
 
-            var existing = await _context.PackingStations.FindAsync(station.Id);
+            var existing = await context.PackingStations.FindAsync(station.Id);
             if (existing == null) throw new KeyNotFoundException("Packing Station not found");
 
-            if (existing.Code != station.Code && await _context.PackingStations.AnyAsync(p => p.BranchId == station.BranchId && p.Code == station.Code))
+            if (existing.Code != station.Code && await context.PackingStations.AnyAsync(p => p.BranchId == station.BranchId && p.Code == station.Code))
             {
                 throw new InvalidOperationException($"Packing Station code '{station.Code}' already exists in this branch.");
             }
@@ -51,7 +54,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
             existing.IsActive = station.IsActive;
             // BranchId cannot change
 
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
         }
     }
 }

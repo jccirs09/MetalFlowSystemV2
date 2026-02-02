@@ -1,6 +1,7 @@
 @page "/admin/picking-lists"
 @using MetalFlowSystemV2.Components.Layout
 @using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@using MetalFlowSystemV2.Data
 @using MetalFlowSystemV2.Data.Entities
 @using MetalFlowSystemV2.Data.Services
 @using Microsoft.EntityFrameworkCore
@@ -9,6 +10,7 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin,Supervisor,Planner")]
 @inject PickingListService PickingListService
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject IDialogService DialogService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ISnackbar Snackbar
@@ -82,7 +84,7 @@
                 var branchId = await PickingListService.ResolveBranchAsync(userId);
                 if (branchId != null)
                 {
-                    _pickingLists = await PickingListService.GetPickingLists(branchId.Value).ToListAsync();
+                    _pickingLists = await PickingListService.GetPickingLists(DbFactory, branchId.Value).ToListAsync();
                     _errorMessage = null;
                 }
                 else

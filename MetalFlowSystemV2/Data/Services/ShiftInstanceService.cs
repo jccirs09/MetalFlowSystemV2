@@ -5,12 +5,12 @@ namespace MetalFlowSystemV2.Data.Services
 {
     public class ShiftInstanceService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly Admin.UserWorkAssignmentService _assignmentService;
 
-        public ShiftInstanceService(ApplicationDbContext context, Admin.UserWorkAssignmentService assignmentService)
+        public ShiftInstanceService(IDbContextFactory<ApplicationDbContext> contextFactory, Admin.UserWorkAssignmentService assignmentService)
         {
-            _context = context;
+            _contextFactory = contextFactory;
             _assignmentService = assignmentService;
         }
 
@@ -21,10 +21,12 @@ namespace MetalFlowSystemV2.Data.Services
 
         public async Task CheckInAsync(string userId, int branchId, DateOnly shiftDate)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            using var context = await _contextFactory.CreateDbContextAsync();
+            using var transaction = await context.Database.BeginTransactionAsync();
             try
             {
                 // 1. Resolve Assignment
+                // Note: assignmentService now uses its own Factory context, so we are safe.
                 var assignment = await ResolveActiveAssignmentAsync(userId, branchId);
                 if (assignment == null)
                     throw new InvalidOperationException("No active work assignment found for this user.");
@@ -35,21 +37,21 @@ namespace MetalFlowSystemV2.Data.Services
                 // 2. Get/Create Shift Instance
                 if (assignment.WorkMode == WorkMode.ProductionArea)
                 {
-                    var areaShift = await GetOrCreateAreaShiftAsync(branchId, assignment.ProductionAreaId!.Value, assignment.ShiftTemplateId, shiftDate);
+                    var areaShift = await GetOrCreateAreaShiftAsync(context, branchId, assignment.ProductionAreaId!.Value, assignment.ShiftTemplateId, shiftDate);
                     if (areaShift.Status == ShiftStatus.Closed)
                         throw new InvalidOperationException("This shift is closed.");
                     areaShiftId = areaShift.Id;
                 }
                 else
                 {
-                    var stationShift = await GetOrCreateStationShiftAsync(branchId, assignment.PackingStationId!.Value, assignment.ShiftTemplateId, shiftDate);
+                    var stationShift = await GetOrCreateStationShiftAsync(context, branchId, assignment.PackingStationId!.Value, assignment.ShiftTemplateId, shiftDate);
                     if (stationShift.Status == ShiftStatus.Closed)
                         throw new InvalidOperationException("This shift is closed.");
                     stationShiftId = stationShift.Id;
                 }
 
                 // 3. Create Attendance (Idempotent)
-                var existingAttendance = await _context.ShiftAttendances
+                var existingAttendance = await context.ShiftAttendances
                     .FirstOrDefaultAsync(a =>
                         a.UserId == userId &&
                         a.BranchId == branchId &&
@@ -74,11 +76,11 @@ namespace MetalFlowSystemV2.Data.Services
                         StationShiftId = stationShiftId,
                         CheckedInAt = DateTime.UtcNow
                     };
-                    _context.ShiftAttendances.Add(attendance);
-                    await _context.SaveChangesAsync();
+                    context.ShiftAttendances.Add(attendance);
+                    await context.SaveChangesAsync();
 
                     // 4. Update Headcount
-                    await UpdateHeadcountsAsync(areaShiftId, stationShiftId);
+                    await UpdateHeadcountsAsync(context, areaShiftId, stationShiftId);
                 }
 
                 await transaction.CommitAsync();
@@ -90,9 +92,9 @@ namespace MetalFlowSystemV2.Data.Services
             }
         }
 
-        private async Task<AreaShift> GetOrCreateAreaShiftAsync(int branchId, int areaId, int shiftTemplateId, DateOnly date)
+        private async Task<AreaShift> GetOrCreateAreaShiftAsync(ApplicationDbContext context, int branchId, int areaId, int shiftTemplateId, DateOnly date)
         {
-            var shift = await _context.AreaShifts
+            var shift = await context.AreaShifts
                 .FirstOrDefaultAsync(s => s.BranchId == branchId && s.ProductionAreaId == areaId && s.ShiftTemplateId == shiftTemplateId && s.ShiftDate == date);
 
             if (shift == null)
@@ -106,15 +108,15 @@ namespace MetalFlowSystemV2.Data.Services
                     Status = ShiftStatus.Active,
                     CreatedAt = DateTime.UtcNow
                 };
-                _context.AreaShifts.Add(shift);
-                await _context.SaveChangesAsync();
+                context.AreaShifts.Add(shift);
+                await context.SaveChangesAsync();
             }
             return shift;
         }
 
-        private async Task<StationShift> GetOrCreateStationShiftAsync(int branchId, int stationId, int shiftTemplateId, DateOnly date)
+        private async Task<StationShift> GetOrCreateStationShiftAsync(ApplicationDbContext context, int branchId, int stationId, int shiftTemplateId, DateOnly date)
         {
-            var shift = await _context.StationShifts
+            var shift = await context.StationShifts
                 .FirstOrDefaultAsync(s => s.BranchId == branchId && s.PackingStationId == stationId && s.ShiftTemplateId == shiftTemplateId && s.ShiftDate == date);
 
             if (shift == null)
@@ -128,102 +130,104 @@ namespace MetalFlowSystemV2.Data.Services
                     Status = ShiftStatus.Active,
                     CreatedAt = DateTime.UtcNow
                 };
-                _context.StationShifts.Add(shift);
-                await _context.SaveChangesAsync();
+                context.StationShifts.Add(shift);
+                await context.SaveChangesAsync();
             }
             return shift;
         }
 
-        private async Task UpdateHeadcountsAsync(int? areaShiftId, int? stationShiftId)
+        private async Task UpdateHeadcountsAsync(ApplicationDbContext context, int? areaShiftId, int? stationShiftId)
         {
             if (areaShiftId.HasValue)
             {
-                var shift = await _context.AreaShifts.FindAsync(areaShiftId.Value);
+                var shift = await context.AreaShifts.FindAsync(areaShiftId.Value);
                 if (shift != null)
                 {
                     // Calculate Expected: Count of active assignments for this context
-                    var expected = await _context.UserWorkAssignments
+                    var expected = await context.UserWorkAssignments
                         .CountAsync(a => a.BranchId == shift.BranchId &&
                                          a.ProductionAreaId == shift.ProductionAreaId &&
                                          a.ShiftTemplateId == shift.ShiftTemplateId &&
                                          a.IsActive);
 
                     // Calculate Confirmed: Count of attendance
-                    var confirmed = await _context.ShiftAttendances
+                    var confirmed = await context.ShiftAttendances
                         .CountAsync(a => a.AreaShiftId == areaShiftId.Value);
 
                     shift.ExpectedHeadcount = expected;
                     shift.ConfirmedHeadcount = confirmed; // Unless manually overridden logic is added later
-                    await _context.SaveChangesAsync();
+                    await context.SaveChangesAsync();
                 }
             }
 
             if (stationShiftId.HasValue)
             {
-                var shift = await _context.StationShifts.FindAsync(stationShiftId.Value);
+                var shift = await context.StationShifts.FindAsync(stationShiftId.Value);
                 if (shift != null)
                 {
-                    var expected = await _context.UserWorkAssignments
+                    var expected = await context.UserWorkAssignments
                         .CountAsync(a => a.BranchId == shift.BranchId &&
                                          a.PackingStationId == shift.PackingStationId &&
                                          a.ShiftTemplateId == shift.ShiftTemplateId &&
                                          a.IsActive);
 
-                    var confirmed = await _context.ShiftAttendances
+                    var confirmed = await context.ShiftAttendances
                         .CountAsync(a => a.StationShiftId == stationShiftId.Value);
 
                     shift.ExpectedHeadcount = expected;
                     shift.ConfirmedHeadcount = confirmed;
-                    await _context.SaveChangesAsync();
+                    await context.SaveChangesAsync();
                 }
             }
         }
 
         public async Task CloseShiftAsync(int shiftInstanceId, WorkMode mode, string userId)
         {
+            using var context = _contextFactory.CreateDbContext();
             if (mode == WorkMode.ProductionArea)
             {
-                var shift = await _context.AreaShifts.FindAsync(shiftInstanceId);
+                var shift = await context.AreaShifts.FindAsync(shiftInstanceId);
                 if (shift != null)
                 {
                     shift.Status = ShiftStatus.Closed;
                     shift.ClosedAt = DateTime.UtcNow;
                     shift.ClosedByUserId = userId;
-                    await _context.SaveChangesAsync();
+                    await context.SaveChangesAsync();
                 }
             }
             else
             {
-                var shift = await _context.StationShifts.FindAsync(shiftInstanceId);
+                var shift = await context.StationShifts.FindAsync(shiftInstanceId);
                 if (shift != null)
                 {
                     shift.Status = ShiftStatus.Closed;
                     shift.ClosedAt = DateTime.UtcNow;
                     shift.ClosedByUserId = userId;
-                    await _context.SaveChangesAsync();
+                    await context.SaveChangesAsync();
                 }
             }
         }
 
         public async Task OverrideHeadcountAsync(int shiftInstanceId, WorkMode mode, int newHeadcount, string reason)
         {
+            using var context = _contextFactory.CreateDbContext();
              if (mode == WorkMode.ProductionArea)
             {
-                var shift = await _context.AreaShifts.FindAsync(shiftInstanceId);
+                var shift = await context.AreaShifts.FindAsync(shiftInstanceId);
                 if (shift != null)
                 {
                     shift.ConfirmedHeadcount = newHeadcount;
                     // Ideally log this override in an audit table or specific attendance record
-                    await _context.SaveChangesAsync();
+                    await context.SaveChangesAsync();
                 }
             }
             else
             {
-                var shift = await _context.StationShifts.FindAsync(shiftInstanceId);
+                var shift = await context.StationShifts.FindAsync(shiftInstanceId);
                 if (shift != null)
                 {
                     shift.ConfirmedHeadcount = newHeadcount;
-                    await _context.SaveChangesAsync();
+                    await context.SaveChangesAsync();
                 }
             }
         }
@@ -231,7 +235,8 @@ namespace MetalFlowSystemV2.Data.Services
         // Supervisor Queries
         public async Task<List<AreaShift>> GetAreaShiftsAsync(int branchId, DateOnly? date = null)
         {
-            var query = _context.AreaShifts
+            using var context = _contextFactory.CreateDbContext();
+            var query = context.AreaShifts
                 .Include(s => s.ProductionArea)
                 .Include(s => s.ShiftTemplate)
                 .Where(s => s.BranchId == branchId);
@@ -244,7 +249,8 @@ namespace MetalFlowSystemV2.Data.Services
 
         public async Task<List<StationShift>> GetStationShiftsAsync(int branchId, DateOnly? date = null)
         {
-            var query = _context.StationShifts
+            using var context = _contextFactory.CreateDbContext();
+            var query = context.StationShifts
                 .Include(s => s.PackingStation)
                 .Include(s => s.ShiftTemplate)
                 .Where(s => s.BranchId == branchId);

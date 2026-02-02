@@ -5,16 +5,17 @@ namespace MetalFlowSystemV2.Data.Services.Admin;
 
 public class ProductionAreaAdminService
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-    public ProductionAreaAdminService(ApplicationDbContext context)
+    public ProductionAreaAdminService(IDbContextFactory<ApplicationDbContext> contextFactory)
     {
-        _context = context;
+        _contextFactory = contextFactory;
     }
 
     public async Task<List<ProductionArea>> GetByBranchIdAsync(int branchId)
     {
-        return await _context.ProductionAreas
+        using var context = _contextFactory.CreateDbContext();
+        return await context.ProductionAreas
             .Where(p => p.BranchId == branchId)
             .AsNoTracking()
             .OrderBy(p => p.Code)
@@ -23,25 +24,27 @@ public class ProductionAreaAdminService
 
     public async Task CreateAsync(ProductionArea area)
     {
+        using var context = _contextFactory.CreateDbContext();
         area.Code = area.Code.ToUpperInvariant();
 
-        if (await _context.ProductionAreas.AnyAsync(p => p.BranchId == area.BranchId && p.Code == area.Code))
+        if (await context.ProductionAreas.AnyAsync(p => p.BranchId == area.BranchId && p.Code == area.Code))
         {
             throw new InvalidOperationException($"Production Area code '{area.Code}' already exists in this branch.");
         }
 
-        _context.ProductionAreas.Add(area);
-        await _context.SaveChangesAsync();
+        context.ProductionAreas.Add(area);
+        await context.SaveChangesAsync();
     }
 
     public async Task UpdateAsync(ProductionArea area)
     {
+        using var context = _contextFactory.CreateDbContext();
         area.Code = area.Code.ToUpperInvariant();
 
-        var existing = await _context.ProductionAreas.FindAsync(area.Id);
+        var existing = await context.ProductionAreas.FindAsync(area.Id);
         if (existing == null) throw new KeyNotFoundException("Production Area not found");
 
-        if (existing.Code != area.Code && await _context.ProductionAreas.AnyAsync(p => p.BranchId == area.BranchId && p.Code == area.Code))
+        if (existing.Code != area.Code && await context.ProductionAreas.AnyAsync(p => p.BranchId == area.BranchId && p.Code == area.Code))
         {
             throw new InvalidOperationException($"Production Area code '{area.Code}' already exists in this branch.");
         }
@@ -53,6 +56,6 @@ public class ProductionAreaAdminService
         // BranchId should typically not change, or if it does, check existence there too.
         // For now assuming BranchId is fixed or consistent.
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
     }
 }
