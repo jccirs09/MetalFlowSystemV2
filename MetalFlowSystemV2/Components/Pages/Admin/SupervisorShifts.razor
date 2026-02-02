@@ -1,0 +1,174 @@
+@page "/supervisor/shifts"
+@layout EmptyLayout
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@attribute [Authorize(Roles = "Admin,Supervisor")]
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@inject ShiftInstanceService ShiftService
+@inject BranchAdminService BranchService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">Daily Shift Overview</MudText>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="int?" Label="Select Branch" Value="_selectedBranchId" ValueChanged="OnBranchChanged" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                @foreach (var branch in _branches)
+                {
+                    <MudSelectItem Value="@((int?)branch.Id)">@branch.Code - @branch.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudDatePicker Label="Shift Date" @bind-Date="_selectedDate" DateFormat="yyyy-MM-dd" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3" Class="d-flex align-center">
+             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadData" Disabled="@(_selectedBranchId == null)">Refresh</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+        <MudTabPanel Text="Production Areas">
+            <MudTable Items="_areaShifts" Hover="true" Loading="_loading">
+                <HeaderContent>
+                    <MudTh>Date</MudTh>
+                    <MudTh>Shift</MudTh>
+                    <MudTh>Area</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Headcount (Exp/Conf)</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.ShiftDate.ToString("yyyy-MM-dd")</MudTd>
+                    <MudTd>@context.ShiftTemplate?.Name</MudTd>
+                    <MudTd>@context.ProductionArea?.Code</MudTd>
+                    <MudTd>
+                        @if(context.Status == ShiftStatus.Active) { <MudChip T="string" Color="Color.Success" Size="Size.Small">Active</MudChip> }
+                        else if (context.Status == ShiftStatus.Closed) { <MudChip T="string" Color="Color.Dark" Size="Size.Small">Closed</MudChip> }
+                        else { <MudChip T="string" Color="Color.Default" Size="Size.Small">Planned</MudChip> }
+                    </MudTd>
+                    <MudTd>@context.ExpectedHeadcount / @context.ConfirmedHeadcount</MudTd>
+                    <MudTd>
+                        @if(context.Status == ShiftStatus.Active)
+                        {
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" OnClick="@(() => CloseShift(context.Id, WorkMode.ProductionArea))">Close</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudTabPanel>
+        <MudTabPanel Text="Packing Stations">
+             <MudTable Items="_stationShifts" Hover="true" Loading="_loading">
+                <HeaderContent>
+                    <MudTh>Date</MudTh>
+                    <MudTh>Shift</MudTh>
+                    <MudTh>Station</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Headcount (Exp/Conf)</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.ShiftDate.ToString("yyyy-MM-dd")</MudTd>
+                    <MudTd>@context.ShiftTemplate?.Name</MudTd>
+                    <MudTd>@context.PackingStation?.Code</MudTd>
+                    <MudTd>
+                         @if(context.Status == ShiftStatus.Active) { <MudChip T="string" Color="Color.Success" Size="Size.Small">Active</MudChip> }
+                        else if (context.Status == ShiftStatus.Closed) { <MudChip T="string" Color="Color.Dark" Size="Size.Small">Closed</MudChip> }
+                        else { <MudChip T="string" Color="Color.Default" Size="Size.Small">Planned</MudChip> }
+                    </MudTd>
+                    <MudTd>@context.ExpectedHeadcount / @context.ConfirmedHeadcount</MudTd>
+                    <MudTd>
+                        @if(context.Status == ShiftStatus.Active)
+                        {
+                             <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" OnClick="@(() => CloseShift(context.Id, WorkMode.PackingStation))">Close</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudTabPanel>
+    </MudTabs>
+
+</AdminLayout>
+
+@code {
+    [Inject] AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+
+    private List<Branch> _branches = new();
+    private List<AreaShift> _areaShifts = new();
+    private List<StationShift> _stationShifts = new();
+
+    private int? _selectedBranchId;
+    private DateTime? _selectedDate = DateTime.Today;
+    private bool _loading = false;
+    private string _currentUserId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+             // Get UserId claim or lookup
+             // _currentUserId = ... (Assuming we have a way to get ID, usually claim 'sub' or similar)
+             // For now, assume Admin can close. Ideally get ID from UserManager.
+             // We'll pass "admin" for now if ID is missing in simple claim access,
+             // but correct way is `user.FindFirst(ClaimTypes.NameIdentifier)?.Value`.
+             _currentUserId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "unknown";
+        }
+
+        _branches = await BranchService.GetAllAsync();
+    }
+
+    private async Task OnBranchChanged(int? branchId)
+    {
+        _selectedBranchId = branchId;
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        if (_selectedBranchId == null) return;
+
+        _loading = true;
+        try
+        {
+            DateOnly? d = _selectedDate.HasValue ? DateOnly.FromDateTime(_selectedDate.Value) : null;
+
+            _areaShifts = await ShiftService.GetAreaShiftsAsync(_selectedBranchId.Value, d);
+            _stationShifts = await ShiftService.GetStationShiftsAsync(_selectedBranchId.Value, d);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading shifts: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task CloseShift(int id, WorkMode mode)
+    {
+        var parameters = new DialogParameters { ["ContentText"] = "Are you sure you want to CLOSE this shift? No further check-ins will be allowed." };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Close Shift", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                await ShiftService.CloseShiftAsync(id, mode, _currentUserId);
+                await LoadData();
+                Snackbar.Add("Shift closed successfully.", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

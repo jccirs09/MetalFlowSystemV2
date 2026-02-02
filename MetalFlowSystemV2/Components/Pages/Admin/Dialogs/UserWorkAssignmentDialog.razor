@@ -1,0 +1,164 @@
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject UserWorkAssignmentService AssignmentService
+@inject ShiftAdminService ShiftService
+@inject ProductionAreaAdminService AreaService
+@inject PackingStationAdminService StationService
+@inject UserAdminService UserService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudSelect T="string" Label="User" @bind-Value="model.UserId" Required="true" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var user in Users)
+                {
+                    <MudSelectItem Value="@user.Id">@user.UserName - @user.FullName</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="int" Label="Shift Template" @bind-Value="model.ShiftTemplateId" Required="true" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var shift in Shifts)
+                {
+                    <MudSelectItem Value="@shift.Id">@shift.Name (@shift.StartTime.ToString(@"hh\:mm") - @shift.EndTime.ToString(@"hh\:mm"))</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="UserRole" Label="Role" @bind-Value="model.Role" Required="true" AnchorOrigin="Origin.BottomCenter">
+                @foreach (UserRole role in Enum.GetValues(typeof(UserRole)))
+                {
+                    <MudSelectItem Value="@role">@role</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="WorkMode" Label="Work Mode" Value="model.WorkMode" ValueChanged="OnWorkModeChanged" Required="true" AnchorOrigin="Origin.BottomCenter">
+                @foreach (WorkMode mode in Enum.GetValues(typeof(WorkMode)))
+                {
+                    <MudSelectItem Value="@mode">@mode</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (model.WorkMode == WorkMode.ProductionArea)
+            {
+                <MudSelect T="int?" Label="Production Area" @bind-Value="model.ProductionAreaId" Required="true" AnchorOrigin="Origin.BottomCenter">
+                    @foreach (var area in ProductionAreas)
+                    {
+                        <MudSelectItem Value="@((int?)area.Id)">@area.Code - @area.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            else if (model.WorkMode == WorkMode.PackingStation)
+            {
+                <MudSelect T="int?" Label="Packing Station" @bind-Value="model.PackingStationId" Required="true" AnchorOrigin="Origin.BottomCenter">
+                    @foreach (var station in PackingStations)
+                    {
+                        <MudSelectItem Value="@((int?)station.Id)">@station.Code - @station.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+
+            <MudCheckBox @bind-Value="model.IsActive" Label="Active" Color="Color.Primary" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public UserWorkAssignment? Assignment { get; set; }
+    [Parameter] public int BranchId { get; set; }
+
+    private UserWorkAssignment model = new();
+    private List<ApplicationUser> Users = new();
+    private List<Shift> Shifts = new();
+    private List<ProductionArea> ProductionAreas = new();
+    private List<PackingStation> PackingStations = new();
+
+    private MudForm form;
+    private bool success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load data in parallel
+        var usersTask = UserService.GetAllUsersAsync();
+        var shiftsTask = ShiftService.GetByBranchIdAsync(BranchId);
+        var areasTask = AreaService.GetByBranchIdAsync(BranchId);
+        var stationsTask = StationService.GetByBranchIdAsync(BranchId);
+
+        await Task.WhenAll(usersTask, shiftsTask, areasTask, stationsTask);
+
+        Users = await usersTask;
+        Shifts = await shiftsTask;
+        ProductionAreas = await areasTask;
+        PackingStations = await stationsTask;
+
+        if (Assignment != null)
+        {
+            model = new UserWorkAssignment
+            {
+                Id = Assignment.Id,
+                BranchId = Assignment.BranchId,
+                UserId = Assignment.UserId,
+                ShiftTemplateId = Assignment.ShiftTemplateId,
+                WorkMode = Assignment.WorkMode,
+                ProductionAreaId = Assignment.ProductionAreaId,
+                PackingStationId = Assignment.PackingStationId,
+                Role = Assignment.Role,
+                IsActive = Assignment.IsActive
+            };
+        }
+        else
+        {
+            model.BranchId = BranchId;
+            model.WorkMode = WorkMode.ProductionArea; // Default
+            model.Role = UserRole.Operator;
+        }
+    }
+
+    private void OnWorkModeChanged(WorkMode mode)
+    {
+        model.WorkMode = mode;
+        if (mode == WorkMode.ProductionArea)
+        {
+            model.PackingStationId = null;
+        }
+        else
+        {
+            model.ProductionAreaId = null;
+        }
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (success)
+        {
+            try
+            {
+                if (model.Id == 0)
+                {
+                    await AssignmentService.CreateAsync(model);
+                    Snackbar.Add("Assignment created", Severity.Success);
+                }
+                else
+                {
+                    await AssignmentService.UpdateAsync(model);
+                    Snackbar.Add("Assignment updated", Severity.Success);
+                }
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -16,6 +16,21 @@
             <MudNavLink Href="admin/users" Icon="@Icons.Material.Filled.People">Users</MudNavLink>
             <MudNavLink Href="admin/items" Icon="@Icons.Material.Filled.Category">Items</MudNavLink>
             <MudNavLink Href="admin/inventory" Icon="@Icons.Material.Filled.Inventory">Inventory</MudNavLink>
+            <MudNavLink Href="admin/packing-stations" Icon="@Icons.Material.Filled.Inbox">Packing Stations</MudNavLink>
+            <MudNavLink Href="admin/assignments" Icon="@Icons.Material.Filled.AssignmentInd">Assignments</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="Admin,Supervisor">
+        <Authorized>
+             <MudText Typo="Typo.subtitle2" Color="Color.Warning" Class="ml-4 mt-2 mb-1">SUPERVISOR</MudText>
+             <MudNavLink Href="supervisor/shifts" Icon="@Icons.Material.Filled.ViewTimeline">Shift Overview</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView>
+        <Authorized>
+            <MudNavLink Href="check-in" Icon="@Icons.Material.Filled.CheckCircle" Match="NavLinkMatch.All">Check In</MudNavLink>
         </Authorized>
     </AuthorizeView>
 

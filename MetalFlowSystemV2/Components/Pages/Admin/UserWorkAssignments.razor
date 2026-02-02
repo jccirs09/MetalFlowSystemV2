@@ -1,0 +1,140 @@
+@page "/admin/assignments"
+@layout EmptyLayout
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@attribute [Authorize(Roles = "Admin")]
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
+@inject UserWorkAssignmentService AssignmentService
+@inject BranchAdminService BranchService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<AdminLayout>
+    <MudText Typo="Typo.h5" Class="mb-4">User Work Assignments</MudText>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect T="int?" Label="Select Branch" Value="_selectedBranchId" ValueChanged="OnBranchChanged" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                @foreach (var branch in _branches)
+                {
+                    <MudSelectItem Value="@((int?)branch.Id)">@branch.Code - @branch.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Disabled="@(_selectedBranchId == null)">Create Assignment</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <MudTable Items="_assignments" Hover="true" Loading="_loading">
+        <HeaderContent>
+            <MudTh>User</MudTh>
+            <MudTh>Shift</MudTh>
+            <MudTh>Role</MudTh>
+            <MudTh>Context</MudTh>
+            <MudTh>Active</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="User">@context.User?.UserName</MudTd>
+            <MudTd DataLabel="Shift">@context.ShiftTemplate?.Name</MudTd>
+            <MudTd DataLabel="Role">@context.Role</MudTd>
+            <MudTd DataLabel="Context">
+                @if (context.WorkMode == WorkMode.ProductionArea)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">Area: @context.ProductionArea?.Code</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning">Station: @context.PackingStation?.Code</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Active">
+                <MudCheckBox Value="@context.IsActive" ReadOnly="true" Color="Color.Primary" Dense="true" />
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDialog(context))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>@(_selectedBranchId == null ? "Select a branch to view assignments." : "No assignments found.")</MudText>
+        </NoRecordsContent>
+    </MudTable>
+</AdminLayout>
+
+@code {
+    private List<Branch> _branches = new();
+    private List<UserWorkAssignment> _assignments = new();
+    private int? _selectedBranchId;
+    private bool _loading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _branches = await BranchService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading branches: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OnBranchChanged(int? branchId)
+    {
+        _selectedBranchId = branchId;
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        if (_selectedBranchId == null)
+        {
+            _assignments.Clear();
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _assignments = await AssignmentService.GetByBranchAsync(_selectedBranchId.Value);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        if (_selectedBranchId == null) return;
+
+        var parameters = new DialogParameters { ["BranchId"] = _selectedBranchId.Value };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserWorkAssignmentDialog>("Create Assignment", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task OpenEditDialog(UserWorkAssignment assignment)
+    {
+        var parameters = new DialogParameters { ["Assignment"] = assignment, ["BranchId"] = _selectedBranchId.Value };
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserWorkAssignmentDialog>("Edit Assignment", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+}

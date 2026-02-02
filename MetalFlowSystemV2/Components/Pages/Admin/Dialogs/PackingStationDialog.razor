@@ -1,0 +1,77 @@
+@using MetalFlowSystemV2.Data.Entities
+@using MetalFlowSystemV2.Data.Services.Admin
+@inject PackingStationAdminService PackingStationService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudTextField @bind-Value="model.Code" Label="Code" Required="true" RequiredError="Code is required" MaxLength="20" />
+            <MudTextField @bind-Value="model.Name" Label="Name" Required="true" RequiredError="Name is required" MaxLength="100" />
+            <MudCheckBox @bind-Value="model.IsActive" Label="Active" Color="Color.Primary" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public PackingStation? PackingStation { get; set; }
+    [Parameter] public int BranchId { get; set; }
+
+    private PackingStation model = new();
+    private MudForm form;
+    private bool success;
+
+    protected override void OnInitialized()
+    {
+        if (PackingStation != null)
+        {
+            model = new PackingStation
+            {
+                Id = PackingStation.Id,
+                BranchId = PackingStation.BranchId,
+                Code = PackingStation.Code,
+                Name = PackingStation.Name,
+                IsActive = PackingStation.IsActive
+            };
+        }
+        else
+        {
+            model.BranchId = BranchId;
+        }
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (success)
+        {
+            try
+            {
+                if (model.Id == 0)
+                {
+                    await PackingStationService.CreateAsync(model);
+                    Snackbar.Add("Packing Station created", Severity.Success);
+                }
+                else
+                {
+                    await PackingStationService.UpdateAsync(model);
+                    Snackbar.Add("Packing Station updated", Severity.Success);
+                }
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
