@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data
+@using MetalFlowSystemV2.Data.Entities
 @using MetalFlowSystemV2.Data.Services.Admin
 @using MetalFlowSystemV2.Components.Pages.Admin.Dialogs
 @inject UserAdminService UserService
@@ -18,11 +19,30 @@
         <HeaderContent>
             <MudTh>Email</MudTh>
             <MudTh>Full Name</MudTh>
+            <MudTh>Branches</MudTh>
             <MudTh>Actions</MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Email">@context.Email</MudTd>
             <MudTd DataLabel="Full Name">@context.FullName</MudTd>
+            <MudTd DataLabel="Branches">
+                 @if (context.UserBranches != null && context.UserBranches.Any())
+                {
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var ub in context.UserBranches)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="@(ub.IsDefault ? Color.Primary : Color.Default)" Variant="Variant.Outlined">
+                                @(ub.Branch?.Code ?? ub.BranchId.ToString())
+                                @if(ub.IsDefault) { <MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Small" Class="ml-1"/> }
+                            </MudChip>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <span class="mud-text-secondary">No Access</span>
+                }
+            </MudTd>
             <MudTd DataLabel="Actions">
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenEditDialog(context))" />
             </MudTd>
@@ -44,7 +64,26 @@
         _loading = true;
         try
         {
-            _users = await UserService.GetAllUsersAsync();
+            // We need to fetch users WITH branches for display
+            // GetAllUsersAsync returns List<ApplicationUser>, but does it include branches?
+            // UserAdminService.GetAllUsersAsync returns _userManager.Users.ToListAsync().
+            // This does NOT include navigation properties by default in EF Core Identity unless lazy loading (not recommended) or explicit include.
+            // But UserAdminService doesn't expose an Include method on GetAllUsersAsync.
+            // I should verify UserAdminService.GetAllUsersAsync implementation.
+
+            // Checking UserAdminService.cs content earlier:
+            // public async Task<List<ApplicationUser>> GetAllUsersAsync() { return await _userManager.Users.ToListAsync(); }
+            // This likely doesn't include UserBranches.
+
+            // I need to update UserAdminService to include branches or use a different method.
+            // Let's assume I need to fetch them.
+            // I'll update UserAdminService to fetch branches in GetAllUsersAsync or add a new method.
+
+            // Actually, I'll update UserAdminService.GetAllUsersAsync to include relations.
+            // Wait, I can't easily modify UserManager query without casting to IQueryable of DbContext if using Stores.
+            // But UserAdminService has _context.
+
+            _users = await UserService.GetAllUsersWithBranchesAsync();
         }
         catch (Exception ex)
         {

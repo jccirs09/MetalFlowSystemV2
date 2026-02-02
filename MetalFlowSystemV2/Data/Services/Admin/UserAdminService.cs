@@ -11,6 +11,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
         public string BranchName { get; set; } = string.Empty;
         public string RoleId { get; set; } = string.Empty;
         public string RoleName { get; set; } = string.Empty;
+        public bool IsDefault { get; set; }
     }
 
     public class UserAdminService
@@ -32,6 +33,14 @@ namespace MetalFlowSystemV2.Data.Services.Admin
         public async Task<List<ApplicationUser>> GetAllUsersAsync()
         {
             return await _userManager.Users.ToListAsync();
+        }
+
+        public async Task<List<ApplicationUser>> GetAllUsersWithBranchesAsync()
+        {
+            return await _context.Users
+                .Include(u => u.UserBranches)
+                .ThenInclude(ub => ub.Branch)
+                .ToListAsync();
         }
 
         public async Task<ApplicationUser?> GetUserWithBranchesAsync(string userId)
@@ -58,13 +67,17 @@ namespace MetalFlowSystemV2.Data.Services.Admin
             // Assign Branches
             if (branches != null && branches.Any())
             {
+                // Ensure only one default
+                EnsureSingleDefault(branches);
+
                 foreach (var branchDto in branches)
                 {
                     var userBranch = new UserBranch
                     {
                         UserId = user.Id,
                         BranchId = branchDto.BranchId,
-                        RoleId = branchDto.RoleId
+                        RoleId = branchDto.RoleId,
+                        IsDefault = branchDto.IsDefault
                     };
                     _context.UserBranches.Add(userBranch);
                 }
@@ -107,16 +120,30 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 _context.UserBranches.RemoveRange(branchesToRemove);
             }
 
+            // Ensure only one default
+            EnsureSingleDefault(branches);
+
             // Add or Update branches
             foreach (var branchDto in branches)
             {
                 var existingBranch = currentBranches.FirstOrDefault(cb => cb.BranchId == branchDto.BranchId);
                 if (existingBranch != null)
                 {
-                    // Update Role if changed
+                    // Update Role or Default if changed
+                    bool changed = false;
                     if (existingBranch.RoleId != branchDto.RoleId)
                     {
                         existingBranch.RoleId = branchDto.RoleId;
+                        changed = true;
+                    }
+                    if (existingBranch.IsDefault != branchDto.IsDefault)
+                    {
+                        existingBranch.IsDefault = branchDto.IsDefault;
+                        changed = true;
+                    }
+
+                    if (changed)
+                    {
                         _context.UserBranches.Update(existingBranch);
                     }
                 }
@@ -127,7 +154,8 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                     {
                         UserId = user.Id,
                         BranchId = branchDto.BranchId,
-                        RoleId = branchDto.RoleId
+                        RoleId = branchDto.RoleId,
+                        IsDefault = branchDto.IsDefault
                     };
                     _context.UserBranches.Add(newBranch);
                 }
@@ -154,8 +182,36 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 BranchId = ub.BranchId,
                 BranchName = ub.Branch.Name,
                 RoleId = ub.RoleId,
-                RoleName = roles.ContainsKey(ub.RoleId) ? roles[ub.RoleId]! : "Unknown"
+                RoleName = roles.ContainsKey(ub.RoleId) ? roles[ub.RoleId]! : "Unknown",
+                IsDefault = ub.IsDefault
             }).ToList();
+        }
+
+        private void EnsureSingleDefault(List<UserBranchDto> branches)
+        {
+            if (branches == null) return;
+
+            var defaultCount = branches.Count(b => b.IsDefault);
+            if (defaultCount > 1)
+            {
+                // If more than one default, keep the last one (or first). UI should handle this, but safe fallback.
+                // Let's keep the last one marked as default, reset others.
+                bool kept = false;
+                for (int i = branches.Count - 1; i >= 0; i--)
+                {
+                    if (branches[i].IsDefault)
+                    {
+                        if (!kept)
+                        {
+                            kept = true;
+                        }
+                        else
+                        {
+                            branches[i].IsDefault = false;
+                        }
+                    }
+                }
+            }
         }
     }
 }

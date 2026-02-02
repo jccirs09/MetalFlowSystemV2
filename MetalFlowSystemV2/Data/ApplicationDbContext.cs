@@ -26,6 +26,12 @@ namespace MetalFlowSystemV2.Data
                 .HasIndex(ub => new { ub.UserId, ub.BranchId })
                 .IsUnique();
 
+            // Constraint: Only one default branch per user
+            builder.Entity<UserBranch>()
+                .HasIndex(ub => ub.UserId)
+                .IsUnique()
+                .HasFilter("[IsDefault] = 1");
+
             // Branch Code Unique
             builder.Entity<Branch>()
                 .HasIndex(b => b.Code)

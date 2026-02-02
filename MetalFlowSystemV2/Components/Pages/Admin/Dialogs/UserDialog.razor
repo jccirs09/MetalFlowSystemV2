@@ -48,11 +48,16 @@
                         <HeaderContent>
                             <MudTh>Branch</MudTh>
                             <MudTh>Role</MudTh>
+                            <MudTh>Default</MudTh>
                             <MudTh>Action</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd>@context.BranchName</MudTd>
                             <MudTd>@context.RoleName</MudTd>
+                            <MudTd>
+                                @* Use a checkbox that acts like a radio button by unchecking others *@
+                                <MudCheckBox T="bool" Value="@context.IsDefault" ValueChanged="@((val) => OnDefaultChanged(context, val))" Color="Color.Primary" Dense="true" />
+                            </MudTd>
                             <MudTd>
                                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveBranchAssignment(context))" />
                             </MudTd>
@@ -115,6 +120,25 @@
         return null;
     }
 
+    private void OnDefaultChanged(UserBranchDto dto, bool isChecked)
+    {
+        if (isChecked)
+        {
+            // Uncheck all others
+            foreach (var item in _branchAssignments)
+            {
+                item.IsDefault = false;
+            }
+            // Check this one
+            dto.IsDefault = true;
+        }
+        else
+        {
+            // Allowing unchecking (no default) is fine.
+            dto.IsDefault = false;
+        }
+    }
+
     private void AddBranchAssignment()
     {
         if (_selectedBranchId == null || _selectedBranchId == 0 || string.IsNullOrEmpty(_selectedRoleId))
@@ -140,13 +164,22 @@
 
             if (branch != null && role != null)
             {
-                _branchAssignments.Add(new UserBranchDto
+                var newDto = new UserBranchDto
                 {
                     BranchId = branch.Id,
                     BranchName = branch.Name,
                     RoleId = role.Id,
-                    RoleName = role.Name ?? "Unknown"
-                });
+                    RoleName = role.Name ?? "Unknown",
+                    IsDefault = false
+                };
+
+                // If it's the first one, maybe make it default?
+                if (!_branchAssignments.Any())
+                {
+                    newDto.IsDefault = true;
+                }
+
+                _branchAssignments.Add(newDto);
             }
         }
     }
