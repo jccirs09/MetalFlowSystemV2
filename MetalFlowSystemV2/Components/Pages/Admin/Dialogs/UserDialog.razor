@@ -81,13 +81,20 @@
 
     protected override async Task OnInitializedAsync()
     {
-        allBranches = await BranchService.GetAllAsync();
-        allRoles = await UserService.GetAllRolesAsync();
-
-        if (!string.IsNullOrEmpty(user.Id))
+        try
         {
-            // Load existing branches
-            userBranches = await UserService.GetUserBranchDtosAsync(user.Id);
+            allBranches = await BranchService.GetAllAsync();
+            allRoles = await UserService.GetAllRolesAsync();
+
+            if (!string.IsNullOrEmpty(user.Id))
+            {
+                // Load existing branches
+                userBranches = await UserService.GetUserBranchDtosAsync(user.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
         }
     }
 
