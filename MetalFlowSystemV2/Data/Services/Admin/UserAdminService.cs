@@ -50,6 +50,14 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 
         public async Task<(IdentityResult Result, ApplicationUser? User)> CreateUserAsync(ApplicationUser user, string password, List<UserBranchDto> branches)
         {
+            if (string.IsNullOrWhiteSpace(user.Email))
+            {
+                return (IdentityResult.Failed(new IdentityError { Description = "Email is required." }), null);
+            }
+
+            user.Email = user.Email.Trim();
+            user.UserName = user.Email;
+
             var result = await _userManager.CreateAsync(user, password);
             if (!result.Succeeded)
             {
