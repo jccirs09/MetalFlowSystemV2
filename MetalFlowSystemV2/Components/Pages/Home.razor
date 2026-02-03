@@ -1,7 +1,11 @@
-﻿@page "/"
+@page "/"
+@layout EmptyLayout
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
-
-Welcome to your new app.
+<AdminLayout>
+    <MudText Typo="Typo.h3" GutterBottom="true">Hello, world!</MudText>
+    <MudText Class="mb-8">Welcome to your new app.</MudText>
+    <MudAlert Severity="Severity.Normal">You are on the home page.</MudAlert>
+</AdminLayout>
