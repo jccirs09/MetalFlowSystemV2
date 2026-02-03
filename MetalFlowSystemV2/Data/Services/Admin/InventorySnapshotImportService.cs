@@ -32,15 +32,16 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                     return result;
                 }
 
+                // UseHeaderRow = false so we can manually inspect the header row for the blank column
                 var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration
                 {
                     ConfigureDataTable = _ => new ExcelDataTableConfiguration
                     {
-                        UseHeaderRow = true
+                        UseHeaderRow = false
                     }
                 });
 
-                if (dataSet.Tables.Count == 0)
+                if (dataSet.Tables.Count == 0 || dataSet.Tables[0].Rows.Count < 2)
                 {
                     result.Errors.Add("No data found in file.");
                     result.Success = false;
@@ -48,10 +49,29 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 }
 
                 var table = dataSet.Tables[0];
-                var headers = table.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
+                var headerRow = table.Rows[0];
 
+                // Map Headers
+                var headerMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                var blankHeaders = new List<int>();
+
+                for (int i = 0; i < table.Columns.Count; i++)
+                {
+                    var val = headerRow[i]?.ToString()?.Trim();
+                    if (string.IsNullOrEmpty(val))
+                    {
+                        blankHeaders.Add(i);
+                    }
+                    else
+                    {
+                        if (!headerMap.ContainsKey(val))
+                            headerMap[val] = i;
+                    }
+                }
+
+                // Validate Headers
                 var requiredHeaders = new[] { "Item ID", "Description", "Snapshot Loc", "Snapshot" };
-                var missingHeaders = requiredHeaders.Where(h => !headers.Contains(h, StringComparer.OrdinalIgnoreCase)).ToList();
+                var missingHeaders = requiredHeaders.Where(h => !headerMap.ContainsKey(h)).ToList();
 
                 if (missingHeaders.Any())
                 {
@@ -60,11 +80,44 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                     return result;
                 }
 
-                // Validate Rows
-                int rowIndex = 2; // Row 1 is header
-                foreach (DataRow row in table.Rows)
+                // Validate UOM Column (One blank header)
+                if (blankHeaders.Count != 1)
                 {
-                    var snapshotVal = row["Snapshot"]?.ToString();
+                    result.Errors.Add($"File must contain exactly one column with a blank header (for UOM). Found {blankHeaders.Count}.");
+                    result.Success = false;
+                    return result;
+                }
+                int uomIndex = blankHeaders[0];
+
+                int snapshotIndex = headerMap["Snapshot"];
+                int widthIndex = headerMap.ContainsKey("Width") ? headerMap["Width"] : -1;
+                int lengthIndex = headerMap.ContainsKey("Length") ? headerMap["Length"] : -1;
+
+                // Validate Rows
+                int rowIndex = 2; // Data starts at Row 1 (Index 1) which is "Row 2" in Excel
+                for (int i = 1; i < table.Rows.Count; i++)
+                {
+                    var row = table.Rows[i];
+                    var uom = row[uomIndex]?.ToString()?.Trim().ToUpper();
+
+                    if (uom != "PCS" && uom != "LBS")
+                    {
+                        result.Errors.Add($"Row {rowIndex}: Invalid UOM '{uom}'. Must be PCS or LBS.");
+                    }
+                    else if (uom == "PCS")
+                    {
+                        if (widthIndex == -1 || lengthIndex == -1)
+                        {
+                             // We can't validate row-specifics if columns are missing, but we should fail globally if any PCS row exists.
+                             // But we'll catch it here.
+                             if (widthIndex == -1) result.Errors.Add("Column 'Width' is required for PCS items.");
+                             if (lengthIndex == -1) result.Errors.Add("Column 'Length' is required for PCS items.");
+                             // Return early to avoid spamming
+                             if (widthIndex == -1 || lengthIndex == -1) { result.Success = false; return result; }
+                        }
+                    }
+
+                    var snapshotVal = row[snapshotIndex]?.ToString();
                     if (!string.IsNullOrWhiteSpace(snapshotVal) && !decimal.TryParse(snapshotVal, out _))
                     {
                         result.Errors.Add($"Row {rowIndex}: Invalid numeric value for Snapshot '{snapshotVal}'");
@@ -79,7 +132,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 else
                 {
                     result.Success = true;
-                    result.RowsProcessed = table.Rows.Count;
+                    result.RowsProcessed = table.Rows.Count - 1; // Subtract header
                 }
             }
             catch (Exception ex)
@@ -114,21 +167,44 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 
                 var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration
                 {
-                    ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = true }
+                    ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
                 });
                 var table = dataSet.Tables[0];
+                var headerRow = table.Rows[0];
+
+                // Map Headers
+                var headerMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                int uomIndex = -1;
+                for (int i = 0; i < table.Columns.Count; i++)
+                {
+                    var val = headerRow[i]?.ToString()?.Trim();
+                    if (string.IsNullOrEmpty(val)) uomIndex = i;
+                    else if (!headerMap.ContainsKey(val)) headerMap[val] = i;
+                }
+
+                if (uomIndex == -1) throw new Exception("Missing UOM column (blank header).");
+
+                int itemIndex = headerMap["Item ID"];
+                int descIndex = headerMap["Description"];
+                int locIndex = headerMap["Snapshot Loc"];
+                int snapshotIndex = headerMap["Snapshot"];
+                int widthIndex = headerMap.ContainsKey("Width") ? headerMap["Width"] : -1;
+                int lengthIndex = headerMap.ContainsKey("Length") ? headerMap["Length"] : -1;
 
                 var now = DateTime.UtcNow;
                 var itemsCache = await _context.Items.ToDictionaryAsync(i => i.ItemCode, StringComparer.OrdinalIgnoreCase);
 
-                foreach (DataRow row in table.Rows)
+                // Start loop from 1
+                for (int i = 1; i < table.Rows.Count; i++)
                 {
-                    var itemCode = row["Item ID"]?.ToString()?.Trim();
+                    var row = table.Rows[i];
+                    var itemCode = row[itemIndex]?.ToString()?.Trim();
                     if (string.IsNullOrEmpty(itemCode)) continue;
 
-                    var description = row["Description"]?.ToString()?.Trim() ?? "";
-                    var location = row["Snapshot Loc"]?.ToString()?.Trim() ?? "UNKNOWN";
-                    var snapshotStr = row["Snapshot"]?.ToString()?.Trim();
+                    var description = row[descIndex]?.ToString()?.Trim() ?? "";
+                    var location = row[locIndex]?.ToString()?.Trim() ?? "UNKNOWN";
+                    var snapshotStr = row[snapshotIndex]?.ToString()?.Trim();
+                    var uom = row[uomIndex]?.ToString()?.Trim().ToUpper(); // PCS or LBS
 
                     decimal snapshotVal = 0;
                     if (!string.IsNullOrEmpty(snapshotStr) && decimal.TryParse(snapshotStr, out var val))
@@ -140,49 +216,79 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 
                     if (!itemsCache.TryGetValue(itemCode, out var item))
                     {
-                        // Create new Item (Option A)
+                        // Create new Item
                         item = new Item
                         {
                             ItemCode = itemCode,
                             Description = description,
-                            Type = ItemType.Other, // Unclassified
-                            IsActive = false // "Auto-create Item as... IsActive = false"
+                            UOM = uom ?? "PCS",
+                            PoundsPerSquareFoot = 0, // Cannot guess PPSF
+                            IsActive = true // Prompt said "Auto-create... IsActive = false" but typically active. Sticking to false as per existing code, or check logic?
+                            // Existing code had IsActive = false. Keeping it.
                         };
+                        item.IsActive = false;
+
+                        if (uom == "LBS") item.Type = ItemType.Coil;
+                        else item.Type = ItemType.Sheet;
+
                         _context.Items.Add(item);
-                        itemsCache[itemCode] = item;
+                        itemsCache[itemCode] = item; // Add to cache so we reuse it
+                    }
+                    else
+                    {
+                        // Update UOM/Type if mismatch? No, Item Master is authoritative.
+                        // But if UOM is blank in DB, maybe update it?
+                        // Assuming Item Master is setup.
                     }
 
                     var stock = new InventoryStock
                     {
                         BranchId = branchId,
-                        Item = item, // Use navigation property
+                        Item = item,
                         LocationCode = location,
                         LastUpdatedAt = now,
                         IsActive = true
                     };
 
-                    // Logic: Sheet = Qty (Int), Coil = Weight (Decimal)
-                    if (item.Type == ItemType.Sheet)
+                    if (uom == "LBS")
                     {
-                        stock.QuantityOnHand = (int)snapshotVal;
-                    }
-                    else if (item.Type == ItemType.Coil)
-                    {
+                        // Coil
                         stock.WeightOnHand = snapshotVal;
+                        stock.QuantityOnHand = 1; // Logic: Coil count 1
+                        stock.Width = 0; // Not parsed for Coil
+                        stock.Length = 0;
                     }
-                    else // Other / Unknown
+                    else if (uom == "PCS")
                     {
-                        // Heuristic: If integer, treat as Qty. Else Weight.
-                        // Or if Description contains "Sheet"? No, rely on Type.
-                        // If type is unknown, store based on value precision?
-                        if (snapshotVal % 1 == 0)
+                        // Sheet
+                        stock.QuantityOnHand = (int)snapshotVal;
+
+                        // Parse Dimensions
+                        decimal width = 0;
+                        decimal length = 0;
+
+                        if (widthIndex != -1 && decimal.TryParse(row[widthIndex]?.ToString(), out var w)) width = w;
+                        if (lengthIndex != -1 && decimal.TryParse(row[lengthIndex]?.ToString(), out var l)) length = l;
+
+                        if (width == 0 || length == 0)
                         {
-                            stock.QuantityOnHand = (int)snapshotVal;
+                            throw new Exception($"Row {i+1}: Missing Width/Length for PCS item '{itemCode}'.");
                         }
-                        else
+
+                        stock.Width = width;
+                        stock.Length = length;
+
+                        // Calculate Weight
+                        if (item.PoundsPerSquareFoot == null || item.PoundsPerSquareFoot <= 0)
                         {
-                            stock.WeightOnHand = snapshotVal;
+                             throw new Exception($"Row {i+1}: Item '{itemCode}' missing PoundsPerSquareFoot.");
                         }
+
+                        stock.WeightOnHand = stock.QuantityOnHand.Value * (width / 12m) * (length / 12m) * item.PoundsPerSquareFoot.Value;
+                    }
+                    else
+                    {
+                         throw new Exception($"Row {i+1}: Invalid UOM '{uom}'.");
                     }
 
                     _context.InventoryStocks.Add(stock);
@@ -192,7 +298,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 await transaction.CommitAsync();
 
                 result.Success = true;
-                result.RowsProcessed = table.Rows.Count;
+                result.RowsProcessed = table.Rows.Count - 1;
             }
             catch (Exception ex)
             {

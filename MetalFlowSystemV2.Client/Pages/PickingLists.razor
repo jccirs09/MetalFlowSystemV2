@@ -1,0 +1,71 @@
+@page "/picking-lists"
+@using MetalFlowSystemV2.Client.Models
+@using MetalFlowSystemV2.Client.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@inject PickingListClientService PickingListService
+@inject ShiftClientService ShiftService
+@inject NavigationManager Navigation
+@attribute [Authorize]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8">
+    <MudText Typo="Typo.h4" GutterBottom="true">Picking Lists</MudText>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_branchId == 0)
+    {
+         <MudAlert Severity="Severity.Warning">Please Check In or select a branch to view picking lists.</MudAlert>
+    }
+    else
+    {
+        <MudDataGrid Items="@_pickingLists" Filterable="true" SortMode="SortMode.Multiple" Groupable="false">
+            <Columns>
+                <PropertyColumn Property="x => x.PickingListNumber" Title="Number" />
+                <PropertyColumn Property="x => x.ShipDate" Title="Ship Date" Format="d" />
+                <PropertyColumn Property="x => x.Buyer" Title="Buyer" />
+                <PropertyColumn Property="x => x.TotalWeightLbs" Title="Weight (lbs)" Format="N0" />
+                <PropertyColumn Property="x => x.Status" Title="Status" />
+                <TemplateColumn CellClass="d-flex justify-end">
+                    <CellTemplate>
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenDetail(context.Item.Id))">View</MudButton>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+        </MudDataGrid>
+    }
+</MudContainer>
+
+@code {
+    private bool _loading = true;
+    private List<PickingListSummaryDto> _pickingLists = new();
+    private int _branchId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var assignment = await ShiftService.GetMyAssignmentAsync();
+        if (assignment != null && assignment.BranchId > 0)
+        {
+            _branchId = assignment.BranchId;
+            await LoadData();
+        }
+        else
+        {
+             _loading = false;
+        }
+    }
+
+    private async Task LoadData()
+    {
+        _pickingLists = await PickingListService.GetPickingListsAsync(_branchId);
+        _loading = false;
+    }
+
+    private void OpenDetail(int id)
+    {
+        Navigation.NavigateTo($"/picking-lists/{id}");
+    }
+}
