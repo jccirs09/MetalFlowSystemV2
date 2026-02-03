@@ -11,6 +11,7 @@ namespace MetalFlowSystemV2.Data.Services.Admin
         public string BranchName { get; set; } = string.Empty;
         public string RoleId { get; set; } = string.Empty;
         public string RoleName { get; set; } = string.Empty;
+        public bool IsDefault { get; set; }
     }
 
     public class UserAdminService
@@ -65,7 +66,8 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                     {
                         UserId = user.Id,
                         BranchId = branchDto.BranchId,
-                        RoleId = branchDto.RoleId
+                        RoleId = branchDto.RoleId,
+                        IsDefault = branchDto.IsDefault
                     };
                     _context.UserBranches.Add(userBranch);
                     roleIds.Add(branchDto.RoleId);
@@ -126,10 +128,21 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 var existingBranch = currentBranches.FirstOrDefault(cb => cb.BranchId == branchDto.BranchId);
                 if (existingBranch != null)
                 {
-                    // Update Role if changed
+                    // Update fields if changed
+                    bool changed = false;
                     if (existingBranch.RoleId != branchDto.RoleId)
                     {
                         existingBranch.RoleId = branchDto.RoleId;
+                        changed = true;
+                    }
+                    if (existingBranch.IsDefault != branchDto.IsDefault)
+                    {
+                        existingBranch.IsDefault = branchDto.IsDefault;
+                        changed = true;
+                    }
+
+                    if (changed)
+                    {
                         _context.UserBranches.Update(existingBranch);
                     }
                 }
@@ -140,7 +153,8 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                     {
                         UserId = user.Id,
                         BranchId = branchDto.BranchId,
-                        RoleId = branchDto.RoleId
+                        RoleId = branchDto.RoleId,
+                        IsDefault = branchDto.IsDefault
                     };
                     _context.UserBranches.Add(newBranch);
                 }
@@ -195,7 +209,8 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                 BranchId = ub.BranchId,
                 BranchName = ub.Branch.Name,
                 RoleId = ub.RoleId,
-                RoleName = roles.ContainsKey(ub.RoleId) ? roles[ub.RoleId]! : "Unknown"
+                RoleName = roles.ContainsKey(ub.RoleId) ? roles[ub.RoleId]! : "Unknown",
+                IsDefault = ub.IsDefault
             }).ToList();
         }
     }

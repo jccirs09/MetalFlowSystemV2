@@ -22,11 +22,15 @@
                 <HeaderContent>
                     <MudTh>Branch</MudTh>
                     <MudTh>Role</MudTh>
+                    <MudTh>Default</MudTh>
                     <MudTh>Actions</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="Branch">@context.BranchName</MudTd>
                     <MudTd DataLabel="Role">@context.RoleName</MudTd>
+                    <MudTd DataLabel="Default">
+                        <MudCheckBox T="bool" Value="@context.IsDefault" ValueChanged="@((val) => SetDefault(context, val))" Color="Color.Primary" Dense="true" />
+                    </MudTd>
                     <MudTd DataLabel="Actions">
                          <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveBranch(context))" />
                     </MudTd>
@@ -127,6 +131,23 @@
     private void RemoveBranch(UserBranchDto item)
     {
         userBranches.Remove(item);
+    }
+
+    private void SetDefault(UserBranchDto item, bool isDefault)
+    {
+        if (isDefault)
+        {
+            // Unset others
+            foreach (var b in userBranches)
+            {
+                b.IsDefault = false;
+            }
+            item.IsDefault = true;
+        }
+        else
+        {
+            item.IsDefault = false;
+        }
     }
 
     private async Task Submit()

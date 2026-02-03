@@ -22,5 +22,7 @@ namespace MetalFlowSystemV2.Data.Entities
 
         [Required]
         public string RoleId { get; set; } = string.Empty;
+
+        public bool IsDefault { get; set; }
     }
 }
