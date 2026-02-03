@@ -281,10 +281,15 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                         // Calculate Weight
                         if (item.PoundsPerSquareFoot == null || item.PoundsPerSquareFoot <= 0)
                         {
-                             throw new Exception($"Row {i+1}: Item '{itemCode}' missing PoundsPerSquareFoot.");
+                             // Allow missing PPSF for import, set weight to 0 or null.
+                             // This allows auto-created items (PPSF=0) to proceed without failing the whole file.
+                             // The user can fix PPSF in Item Master later.
+                             stock.WeightOnHand = 0;
                         }
-
-                        stock.WeightOnHand = stock.QuantityOnHand.Value * (width / 12m) * (length / 12m) * item.PoundsPerSquareFoot.Value;
+                        else
+                        {
+                            stock.WeightOnHand = stock.QuantityOnHand.Value * (width / 12m) * (length / 12m) * item.PoundsPerSquareFoot.Value;
+                        }
                     }
                     else
                     {

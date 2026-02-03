@@ -47,8 +47,18 @@ namespace MetalFlowSystemV2.Endpoints
 
             group.MapGet("/{id}", async (
                 int id,
+                ClaimsPrincipal user,
                 ApplicationDbContext context) =>
             {
+                var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+                // 1. Enforce Role Check
+                if (!user.IsInRole("Admin") && !user.IsInRole("Supervisor") && !user.IsInRole("Planner"))
+                {
+                    return Results.Forbid();
+                }
+
                 var pl = await context.PickingLists
                     .Include(p => p.Lines)
                         .ThenInclude(l => l.ReservedMaterials)
@@ -57,6 +67,24 @@ namespace MetalFlowSystemV2.Endpoints
                     .FirstOrDefaultAsync(p => p.Id == id);
 
                 if (pl == null) return Results.NotFound();
+
+                // 2. Enforce Branch Access
+                // Check if user is assigned to this branch via UserBranches or UserWorkAssignment
+                var hasBranchAccess = await context.UserBranches
+                    .AnyAsync(ub => ub.UserId == userId && ub.BranchId == pl.BranchId);
+
+                if (!hasBranchAccess)
+                {
+                     // Fallback: Check active assignment (though usually covered by UserBranches if logic is consistent,
+                     // but sometimes assignments exist without explicit UserBranch record? Unlikely but safer to check)
+                     var hasActiveAssignment = await context.UserWorkAssignments
+                        .AnyAsync(uwa => uwa.UserId == userId && uwa.BranchId == pl.BranchId && uwa.IsActive);
+
+                     if (!hasActiveAssignment)
+                     {
+                         return Results.Forbid();
+                     }
+                }
 
                 var dto = new PickingListDetailDto
                 {
