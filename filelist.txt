@@ -1,0 +1,11 @@
+Components
+Data
+MetalFlowSystemV2.csproj
+Migrations
+Program.cs
+Properties
+appsettings.Development.json
+appsettings.json
+bin\Debug
+metalflow.db
+wwwroot
