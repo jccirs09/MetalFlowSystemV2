@@ -50,6 +50,13 @@ namespace MetalFlowSystemV2.Data.Services
                 return userBranches.First().BranchId;
             }
 
+            // Check for Default Branch
+            var defaultBranch = userBranches.FirstOrDefault(ub => ub.IsDefault);
+            if (defaultBranch != null)
+            {
+                return defaultBranch.BranchId;
+            }
+
             return null;
         }
 

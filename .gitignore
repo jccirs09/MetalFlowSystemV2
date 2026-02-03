@@ -404,3 +404,9 @@ FodyWeavers.xsd
 *.db
 *.sqlite
 *.sqlite3
+
+# Explicitly ignore bin/obj and potential malformed variations
+**/bin/
+**/obj/
+**/bin\Debug/
+**/obj\Debug/
