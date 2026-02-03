@@ -12,7 +12,7 @@
             <MudTextField T="string" Label="Full Name" @bind-Value="user.FullName" Required="true" RequiredError="Full Name is required!" />
             <MudTextField T="string" Label="Email" @bind-Value="user.Email" Required="true" RequiredError="Email is required!" InputType="InputType.Email" />
 
-            @if (string.IsNullOrEmpty(user.Id))
+            @if (_isNew)
             {
                 <MudTextField T="string" Label="Password" @bind-Value="password" Required="true" RequiredError="Password is required!" InputType="InputType.Password" />
             }
@@ -62,7 +62,7 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Primary" OnClick="Submit">@((string.IsNullOrEmpty(user.Id) ? "Create" : "Save"))</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">@((_isNew ? "Create" : "Save"))</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -74,6 +74,7 @@
     private MudForm form;
     private bool success;
     private string password;
+    private bool _isNew;
 
     // Branch Assignment State
     private List<UserBranchDto> userBranches = new();
@@ -87,10 +88,15 @@
     {
         try
         {
+            if (string.IsNullOrEmpty(user.UserName) && string.IsNullOrEmpty(user.Email))
+            {
+                _isNew = true;
+            }
+
             allBranches = await BranchService.GetAllAsync();
             allRoles = await UserService.GetAllRolesAsync();
 
-            if (!string.IsNullOrEmpty(user.Id))
+            if (!_isNew)
             {
                 // Load existing branches
                 userBranches = await UserService.GetUserBranchDtosAsync(user.Id);
@@ -157,7 +163,7 @@
         if (success)
         {
             // If editing, we pass the userBranches list back to be saved
-            if (string.IsNullOrEmpty(user.Id))
+            if (_isNew)
             {
                 var result = await UserService.CreateUserAsync(user, password, userBranches);
                 if (result.Result.Succeeded)
