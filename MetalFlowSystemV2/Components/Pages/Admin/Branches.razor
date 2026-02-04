@@ -1,5 +1,4 @@
 @page "/admin/branches"
-@layout EmptyLayout
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data.Entities
@@ -9,7 +8,8 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<AdminLayout>
+<AdminShell>
+
     <MudText Typo="Typo.h5" Class="mb-4">Branches</MudText>
 
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Class="mb-4">Create Branch</MudButton>
@@ -38,8 +38,9 @@
             </MudTd>
         </RowTemplate>
     </MudTable>
-</AdminLayout>
 
+
+</AdminShell>
 @code {
     private List<Branch> _branches = new();
     private bool _loading = true;

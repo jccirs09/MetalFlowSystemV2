@@ -1,5 +1,4 @@
 @page "/admin/assignments"
-@layout EmptyLayout
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data.Entities
@@ -10,7 +9,8 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<AdminLayout>
+<AdminShell>
+
     <MudText Typo="Typo.h5" Class="mb-4">User Work Assignments</MudText>
 
     <MudGrid Class="mb-4">
@@ -61,8 +61,9 @@
             <MudText>@(_selectedBranchId == null ? "Select a branch to view assignments." : "No assignments found.")</MudText>
         </NoRecordsContent>
     </MudTable>
-</AdminLayout>
 
+
+</AdminShell>
 @code {
     private List<Branch> _branches = new();
     private List<UserWorkAssignment> _assignments = new();

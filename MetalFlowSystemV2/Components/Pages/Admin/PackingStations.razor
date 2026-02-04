@@ -1,5 +1,4 @@
 @page "/admin/packing-stations"
-@layout EmptyLayout
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data.Entities
@@ -10,7 +9,8 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<AdminLayout>
+<AdminShell>
+
     <MudText Typo="Typo.h5" Class="mb-4">Packing Stations</MudText>
 
     <MudGrid Class="mb-4">
@@ -48,8 +48,9 @@
             <MudText>@(_selectedBranchId == null ? "Select a branch to view stations." : "No packing stations found.")</MudText>
         </NoRecordsContent>
     </MudTable>
-</AdminLayout>
 
+
+</AdminShell>
 @code {
     private List<Branch> _branches = new();
     private List<PackingStation> _stations = new();

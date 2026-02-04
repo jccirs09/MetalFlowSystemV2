@@ -1,5 +1,4 @@
 @page "/admin/items"
-@layout EmptyLayout
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data.Entities
@@ -8,8 +7,9 @@
 @inject ItemService ItemService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@using MetalFlowSystemV2.Components.Layout
 
-<AdminLayout>
+<AdminShell>
     <MudText Typo="Typo.h5" Class="mb-4">Item Master</MudText>
 
     <MudTable Items="_items" Hover="true" Loading="_loading" Filter="new Func<Item,bool>(FilterFunc)">
@@ -53,7 +53,7 @@
             <MudTablePager />
         </PagerContent>
     </MudTable>
-</AdminLayout>
+</AdminShell>
 
 @code {
     private List<Item> _items = new();

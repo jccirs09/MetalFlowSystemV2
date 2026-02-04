@@ -1,5 +1,4 @@
 @page "/admin/inventory"
-@layout EmptyLayout
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data.Entities
@@ -9,7 +8,8 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<AdminLayout>
+<AdminShell>
+
     <MudText Typo="Typo.h5" Class="mb-4">Inventory Management</MudText>
 
     <MudStack Row="true" Class="mb-4">
@@ -44,8 +44,9 @@
             <MudTablePager />
         </PagerContent>
     </MudTable>
-</AdminLayout>
 
+
+</AdminShell>
 @code {
     private List<InventoryStock> _inventory = new();
     private bool _loading = true;

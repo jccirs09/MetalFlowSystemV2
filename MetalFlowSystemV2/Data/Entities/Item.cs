@@ -15,6 +15,13 @@ namespace MetalFlowSystemV2.Data.Entities
         [MaxLength(200)]
         public string Description { get; set; } = string.Empty;
 
+        [Required]
+        [MaxLength(3)]
+        public string UOM { get; set; } = "LBS";
+
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal PoundsPerSquareFoot { get; set; }
+
         public ItemType Type { get; set; }
 
         // Hierarchy

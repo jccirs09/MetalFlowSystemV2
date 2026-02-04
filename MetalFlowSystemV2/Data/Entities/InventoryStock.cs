@@ -23,6 +23,12 @@ namespace MetalFlowSystemV2.Data.Entities
         [Column(TypeName = "decimal(18, 2)")]
         public decimal? WeightOnHand { get; set; } // For Coil
 
+        [Column(TypeName = "decimal(18, 4)")]
+        public decimal Width { get; set; }
+
+        [Column(TypeName = "decimal(18, 4)")]
+        public decimal Length { get; set; }
+
         public DateTime LastUpdatedAt { get; set; }
 
         public bool IsActive { get; set; } = true;

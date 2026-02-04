@@ -1,0 +1,113 @@
+@page "/picking-lists/{Id:int}"
+@layout ClientLayout
+@inject PickingListClientService PickingService
+@inject NavigationManager NavManager
+@attribute [Authorize]
+
+<PageTitle>Picking List Detail</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else if (_list == null)
+{
+    <MudAlert Severity="Severity.Error">Picking List not found.</MudAlert>
+    <MudButton Variant="Variant.Text" OnClick="GoBack">Back</MudButton>
+}
+else
+{
+    <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" Class="mb-4">Back to List</MudButton>
+
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">@_list.PickingListNumber</MudText>
+                        <MudText Typo="Typo.subtitle1" Color="Color.Secondary">@_list.Buyer</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                         <MudChip T="string" Color="Color.Info" Size="Size.Small">@_list.Status</MudChip>
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText><b>Ship Date:</b> @_list.ShipDate?.ToShortDateString()</MudText>
+                    <MudText><b>Sales Rep:</b> @_list.SalesRep</MudText>
+                    <MudText><b>Ship Via:</b> @_list.ShipVia</MudText>
+                    <MudText><b>Instructions:</b> @_list.Instructions</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Ship To</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText>@_list.ShipToName</MudText>
+                    <MudText>@_list.ShipToAddress1</MudText>
+                    <MudText>@_list.ShipToCity, @_list.ShipToState @_list.ShipToZip</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudTable Items="_list.Lines" Hover="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Line</MudTh>
+                    <MudTh>Item Code</MudTh>
+                    <MudTh>Description</MudTh>
+                    <MudTh>Qty</MudTh>
+                    <MudTh>Dimensions</MudTh>
+                    <MudTh>Weight</MudTh>
+                    <MudTh>Area</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Line">@context.LineNumber</MudTd>
+                    <MudTd DataLabel="Item Code">@context.ItemCode</MudTd>
+                    <MudTd DataLabel="Description">
+                        @context.Description
+                        @if (!string.IsNullOrEmpty(context.Notes))
+                        {
+                            <br/> <MudText Typo="Typo.caption" Color="Color.Warning">Note: @context.Notes</MudText>
+                        }
+                        @if (context.ReservedMaterials.Any())
+                        {
+                            <br/> <MudText Typo="Typo.caption" Color="Color.Info">Reserved: @string.Join(", ", context.ReservedMaterials)</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Qty">@context.OrderedQty @context.OrderedUnit</MudTd>
+                    <MudTd DataLabel="Dimensions">
+                        @if(context.Width > 0 || context.Length > 0)
+                        {
+                            @($"{context.Width:G29} x {context.Length:G29}")
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Weight">@context.Weight.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Area">@context.ProductionArea</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private PickingListDetailDto? _list;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        _list = await PickingService.GetPickingListAsync(Id);
+        _loading = false;
+    }
+
+    private void GoBack()
+    {
+        NavManager.NavigateTo("picking-lists");
+    }
+}

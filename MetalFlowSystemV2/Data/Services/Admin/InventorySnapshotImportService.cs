@@ -3,6 +3,7 @@ using System.Data;
 using MetalFlowSystemV2.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using ExcelDataReader;
+using System.Text.RegularExpressions;
 
 namespace MetalFlowSystemV2.Data.Services.Admin
 {
@@ -60,8 +61,12 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                     return result;
                 }
 
-                // Validate Rows
-                int rowIndex = 2; // Row 1 is header
+                // Check for UOM
+                // We trust the import logic to find it.
+                // We can't validate it strictly here without repeating logic,
+                // but we can check if a candidate exists.
+
+                int rowIndex = 2;
                 foreach (DataRow row in table.Rows)
                 {
                     var snapshotVal = row["Snapshot"]?.ToString();
@@ -108,7 +113,6 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                     stock.IsActive = false;
                 }
 
-                // Read File
                 using var reader = CreateReader(fileStream, fileName);
                 if (reader == null) throw new Exception("Invalid file format");
 
@@ -117,18 +121,55 @@ namespace MetalFlowSystemV2.Data.Services.Admin
                     ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = true }
                 });
                 var table = dataSet.Tables[0];
+                var headers = table.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
+
+                // UOM Detection Strategy
+                var knownHeaders = new[] { "Item ID", "Description", "Snapshot Loc", "Snapshot" };
+                var candidateCols = headers.Except(knownHeaders, StringComparer.OrdinalIgnoreCase).ToList();
+
+                string uomCol = "";
+                foreach(var col in candidateCols)
+                {
+                    var values = table.Rows.Cast<DataRow>().Select(r => r[col]?.ToString()?.ToUpper().Trim()).Where(v => !string.IsNullOrEmpty(v)).Take(10).ToList();
+                    if(values.Any() && values.All(v => v == "PCS" || v == "LBS"))
+                    {
+                        uomCol = col;
+                        break;
+                    }
+                }
+
+                if(string.IsNullOrEmpty(uomCol))
+                {
+                     throw new Exception("Could not identify UOM column (Column with blank header containing PCS/LBS).");
+                }
+
+                // Dimension Detection Strategy
+                // Look for "Width" and "Length"?
+                // Or are they also unnamed?
+                // Let's assume standard names "Width" and "Length" for now.
+                // If they are missing, we default to 0 and fail validation if needed.
+                string widthCol = headers.FirstOrDefault(h => h.Contains("Width", StringComparison.OrdinalIgnoreCase)) ?? "";
+                string lengthCol = headers.FirstOrDefault(h => h.Contains("Length", StringComparison.OrdinalIgnoreCase)) ?? "";
 
                 var now = DateTime.UtcNow;
                 var itemsCache = await _context.Items.ToDictionaryAsync(i => i.ItemCode, StringComparer.OrdinalIgnoreCase);
 
+                int rowIndex = 1;
                 foreach (DataRow row in table.Rows)
                 {
+                    rowIndex++;
                     var itemCode = row["Item ID"]?.ToString()?.Trim();
                     if (string.IsNullOrEmpty(itemCode)) continue;
 
                     var description = row["Description"]?.ToString()?.Trim() ?? "";
                     var location = row["Snapshot Loc"]?.ToString()?.Trim() ?? "UNKNOWN";
                     var snapshotStr = row["Snapshot"]?.ToString()?.Trim();
+                    var uom = row[uomCol]?.ToString()?.ToUpper().Trim();
+
+                    if (uom != "PCS" && uom != "LBS")
+                    {
+                         throw new Exception($"Row {rowIndex}: Invalid UOM '{uom}'. Must be PCS or LBS.");
+                    }
 
                     decimal snapshotVal = 0;
                     if (!string.IsNullOrEmpty(snapshotStr) && decimal.TryParse(snapshotStr, out var val))
@@ -140,49 +181,73 @@ namespace MetalFlowSystemV2.Data.Services.Admin
 
                     if (!itemsCache.TryGetValue(itemCode, out var item))
                     {
-                        // Create new Item (Option A)
                         item = new Item
                         {
                             ItemCode = itemCode,
                             Description = description,
-                            Type = ItemType.Other, // Unclassified
-                            IsActive = false // "Auto-create Item as... IsActive = false"
+                            UOM = uom,
+                            Type = (uom == "LBS") ? ItemType.Coil : ItemType.Sheet,
+                            IsActive = true
                         };
+
+                        if (uom == "PCS")
+                        {
+                             // We cannot validate PPSF here as we just created it and default is 0.
+                             // But we will check calculation logic below.
+                        }
+
                         _context.Items.Add(item);
                         itemsCache[itemCode] = item;
                     }
+                    else
+                    {
+                        if (uom == "PCS" && item.UOM != "PCS")
+                        {
+                             throw new Exception($"Row {rowIndex}: Snapshot says PCS but Item '{itemCode}' is defined as {item.UOM}.");
+                        }
+                    }
+
+                    // Parse Dimensions
+                    decimal width = 0;
+                    decimal length = 0;
+
+                    if (!string.IsNullOrEmpty(widthCol))
+                        decimal.TryParse(row[widthCol]?.ToString(), out width);
+
+                    if (!string.IsNullOrEmpty(lengthCol))
+                        decimal.TryParse(row[lengthCol]?.ToString(), out length);
 
                     var stock = new InventoryStock
                     {
                         BranchId = branchId,
-                        Item = item, // Use navigation property
+                        Item = item,
                         LocationCode = location,
                         LastUpdatedAt = now,
-                        IsActive = true
+                        IsActive = true,
+                        Width = width,
+                        Length = length
                     };
 
-                    // Logic: Sheet = Qty (Int), Coil = Weight (Decimal)
-                    if (item.Type == ItemType.Sheet)
-                    {
-                        stock.QuantityOnHand = (int)snapshotVal;
-                    }
-                    else if (item.Type == ItemType.Coil)
+                    if (uom == "LBS")
                     {
                         stock.WeightOnHand = snapshotVal;
+                        stock.QuantityOnHand = 1;
                     }
-                    else // Other / Unknown
+                    else // PCS
                     {
-                        // Heuristic: If integer, treat as Qty. Else Weight.
-                        // Or if Description contains "Sheet"? No, rely on Type.
-                        // If type is unknown, store based on value precision?
-                        if (snapshotVal % 1 == 0)
-                        {
-                            stock.QuantityOnHand = (int)snapshotVal;
-                        }
-                        else
-                        {
-                            stock.WeightOnHand = snapshotVal;
-                        }
+                        stock.QuantityOnHand = (int)snapshotVal;
+
+                        // Calculation Logic
+                        if (width <= 0 || length <= 0)
+                             throw new Exception($"Row {rowIndex}: Sheet item '{itemCode}' missing valid Dimensions (Width/Length).");
+
+                        if (item.PoundsPerSquareFoot <= 0)
+                             throw new Exception($"Row {rowIndex}: Sheet item '{itemCode}' missing PoundsPerSquareFoot.");
+
+                        // Formula: Qty * Width(ft) * Length(ft) * PPSF
+                        // Assuming Width/Length in Inches
+                        decimal areaSqFt = (width / 12m) * (length / 12m);
+                        stock.WeightOnHand = stock.QuantityOnHand * areaSqFt * item.PoundsPerSquareFoot;
                     }
 
                     _context.InventoryStocks.Add(stock);
