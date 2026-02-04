@@ -23,5 +23,7 @@ namespace MetalFlowSystemV2.Client.Models
 
         public bool IsCheckedIn { get; set; }
         public DateTime? CheckedInAt { get; set; }
+
+        public int? StationShiftId { get; set; }
     }
 }

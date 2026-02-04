@@ -65,6 +65,22 @@ namespace MetalFlowSystemV2.Api
                     dto.CheckedInAt = attendance.CheckedInAt;
                 }
 
+                // Resolve StationShiftId if assigned to PackingStation
+                if (assignment.PackingStationId.HasValue)
+                {
+                    var stationShift = await db.StationShifts
+                        .FirstOrDefaultAsync(ss =>
+                            ss.BranchId == userBranch.BranchId &&
+                            ss.PackingStationId == assignment.PackingStationId.Value &&
+                            ss.ShiftDate == today &&
+                            ss.ShiftTemplateId == assignment.ShiftTemplateId);
+
+                    if (stationShift != null)
+                    {
+                        dto.StationShiftId = stationShift.Id;
+                    }
+                }
+
                 return Results.Ok(dto);
             });
 

@@ -3,6 +3,7 @@ using MetalFlowSystemV2.Components;
 using MetalFlowSystemV2.Components.Account;
 using MetalFlowSystemV2.Data;
 using MetalFlowSystemV2.Api;
+using MetalFlowSystemV2.Endpoints;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;

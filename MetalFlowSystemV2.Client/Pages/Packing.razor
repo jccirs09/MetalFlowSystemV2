@@ -1,6 +1,6 @@
 @page "/packing"
 @using MetalFlowSystemV2.Client.Services
-@using MetalFlowSystemV2.Shared.Dtos
+@using MetalFlowSystemV2.Client.Dtos
 @inject ShiftClientService ShiftService
 @inject PackingClientService PackingService
 @inject ISnackbar Snackbar
@@ -89,7 +89,7 @@
     {
         try
         {
-            _assignment = await ShiftService.GetUserAssignmentAsync();
+            _assignment = await ShiftService.GetMyAssignmentAsync();
             if (_assignment?.StationShiftId != null)
             {
                 await LoadEvents(_assignment.StationShiftId.Value);

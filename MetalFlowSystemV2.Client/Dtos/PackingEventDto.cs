@@ -1,6 +1,6 @@
 using System;
 
-namespace MetalFlowSystemV2.Shared.Dtos
+namespace MetalFlowSystemV2.Client.Dtos
 {
     public class PackingEventDto
     {

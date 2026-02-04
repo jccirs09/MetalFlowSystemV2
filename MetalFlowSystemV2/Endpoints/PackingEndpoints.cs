@@ -1,6 +1,6 @@
 using MetalFlowSystemV2.Data;
 using MetalFlowSystemV2.Data.Entities;
-using MetalFlowSystemV2.Shared.Dtos;
+using MetalFlowSystemV2.Client.Dtos;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
@@ -19,12 +19,12 @@ namespace MetalFlowSystemV2.Endpoints
                     StationShiftId = dto.StationShiftId,
                     PickingListId = dto.PickingListId,
                     PackedAt = DateTime.UtcNow,
-                    PackedWeight = dto.PackedWeight,
-                    LinesPacked = dto.LinesPacked
+                    PackedWeightLbs = dto.PackedWeight,
+                    LineCount = dto.LinesPacked
                 };
                 db.PackingEvents.Add(evt);
                 await db.SaveChangesAsync();
-                return Results.Ok(evt.PackingEventId);
+                return Results.Ok(evt.Id);
             });
 
             group.MapGet("/shift/{stationShiftId}", async (int stationShiftId, ApplicationDbContext db) =>
@@ -33,12 +33,12 @@ namespace MetalFlowSystemV2.Endpoints
                     .Where(e => e.StationShiftId == stationShiftId)
                     .Select(e => new PackingEventDto
                     {
-                        PackingEventId = e.PackingEventId,
+                        PackingEventId = e.Id,
                         StationShiftId = e.StationShiftId,
                         PickingListId = e.PickingListId,
                         PackedAt = e.PackedAt,
-                        PackedWeight = e.PackedWeight,
-                        LinesPacked = e.LinesPacked
+                        PackedWeight = e.PackedWeightLbs,
+                        LinesPacked = e.LineCount
                     })
                     .ToListAsync();
                 return Results.Ok(events);

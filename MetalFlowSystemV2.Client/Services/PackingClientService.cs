@@ -1,5 +1,5 @@
 using System.Net.Http.Json;
-using MetalFlowSystemV2.Shared.Dtos;
+using MetalFlowSystemV2.Client.Dtos;
 
 namespace MetalFlowSystemV2.Client.Services
 {
