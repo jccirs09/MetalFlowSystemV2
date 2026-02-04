@@ -1,107 +1,113 @@
 @page "/picking-lists/{Id:int}"
-@using MetalFlowSystemV2.Client.Models
-@using MetalFlowSystemV2.Client.Services
-@using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Web
-@inject PickingListClientService PickingListService
-@inject NavigationManager Navigation
+@layout ClientLayout
+@inject PickingListClientService PickingService
+@inject NavigationManager NavManager
 @attribute [Authorize]
-@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8">
-    <MudBreadcrumbs Items="_breadcrumbs"></MudBreadcrumbs>
+<PageTitle>Picking List Detail</PageTitle>
 
-    @if (_loading)
-    {
-        <MudProgressCircular Indeterminate="true" />
-    }
-    else if (_dto == null)
-    {
-        <MudAlert Severity="Severity.Error">Picking List not found.</MudAlert>
-    }
-    else
-    {
-        <MudText Typo="Typo.h4" GutterBottom="true">Picking List #@_dto.PickingListNumber</MudText>
+@if (_loading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else if (_list == null)
+{
+    <MudAlert Severity="Severity.Error">Picking List not found.</MudAlert>
+    <MudButton Variant="Variant.Text" OnClick="GoBack">Back</MudButton>
+}
+else
+{
+    <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" Class="mb-4">Back to List</MudButton>
 
-        <MudGrid>
-            <MudItem xs="12" sm="6">
-                <MudCard>
-                    <MudCardContent>
-                        <MudText><b>Buyer:</b> @_dto.Buyer</MudText>
-                        <MudText><b>Sales Rep:</b> @_dto.SalesRep</MudText>
-                        <MudText><b>Ship Via:</b> @_dto.ShipVia</MudText>
-                        <MudText><b>Status:</b> @_dto.Status</MudText>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-            <MudItem xs="12" sm="6">
-                <MudCard>
-                    <MudCardContent>
-                         <MudText><b>Ship To:</b></MudText>
-                         <MudText Typo="Typo.body2">@_dto.ShipTo</MudText>
-                         <MudText Class="mt-2"><b>Instructions:</b></MudText>
-                         <MudText Typo="Typo.body2">@_dto.OrderInstructions</MudText>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-        </MudGrid>
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">@_list.PickingListNumber</MudText>
+                        <MudText Typo="Typo.subtitle1" Color="Color.Secondary">@_list.Buyer</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                         <MudChip T="string" Color="Color.Info" Size="Size.Small">@_list.Status</MudChip>
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText><b>Ship Date:</b> @_list.ShipDate?.ToShortDateString()</MudText>
+                    <MudText><b>Sales Rep:</b> @_list.SalesRep</MudText>
+                    <MudText><b>Ship Via:</b> @_list.ShipVia</MudText>
+                    <MudText><b>Instructions:</b> @_list.Instructions</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Ship To</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText>@_list.ShipToName</MudText>
+                    <MudText>@_list.ShipToAddress1</MudText>
+                    <MudText>@_list.ShipToCity, @_list.ShipToState @_list.ShipToZip</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
 
-        <MudTable Items="@_dto.Lines" Hover="true" Breakpoint="Breakpoint.Sm" Class="mt-4">
-            <HeaderContent>
-                <MudTh>Line</MudTh>
-                <MudTh>Item</MudTh>
-                <MudTh>Description</MudTh>
-                <MudTh>Qty</MudTh>
-                <MudTh>Unit</MudTh>
-                <MudTh>W x L</MudTh>
-                <MudTh>Weight</MudTh>
-                <MudTh>Area</MudTh>
-                <MudTh>Reserved</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Line">@context.LineNumber</MudTd>
-                <MudTd DataLabel="Item">@context.ItemCode</MudTd>
-                <MudTd DataLabel="Description">@context.Description</MudTd>
-                <MudTd DataLabel="Qty">@context.OrderQuantity</MudTd>
-                <MudTd DataLabel="Unit">@context.OrderUnit</MudTd>
-                <MudTd DataLabel="W x L">
-                    @if(context.WidthIn > 0 && context.LengthIn > 0)
-                    {
-                        @($"{context.WidthIn:G29} x {context.LengthIn:G29}")
-                    }
-                </MudTd>
-                <MudTd DataLabel="Weight">@context.LineWeightLbs?.ToString("N0")</MudTd>
-                <MudTd DataLabel="Area">@context.ProductionArea</MudTd>
-                <MudTd DataLabel="Reserved">
-                    @if (context.ReservedMaterials.Any())
-                    {
-                        @foreach(var res in context.ReservedMaterials)
+        <MudItem xs="12">
+            <MudTable Items="_list.Lines" Hover="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>Line</MudTh>
+                    <MudTh>Item Code</MudTh>
+                    <MudTh>Description</MudTh>
+                    <MudTh>Qty</MudTh>
+                    <MudTh>Dimensions</MudTh>
+                    <MudTh>Weight</MudTh>
+                    <MudTh>Area</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Line">@context.LineNumber</MudTd>
+                    <MudTd DataLabel="Item Code">@context.ItemCode</MudTd>
+                    <MudTd DataLabel="Description">
+                        @context.Description
+                        @if (!string.IsNullOrEmpty(context.Notes))
                         {
-                            <div>@res.TagNumber (@res.Quantity @res.Unit) @res.Location</div>
+                            <br/> <MudText Typo="Typo.caption" Color="Color.Warning">Note: @context.Notes</MudText>
                         }
-                    }
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
-    }
-</MudContainer>
+                        @if (context.ReservedMaterials.Any())
+                        {
+                            <br/> <MudText Typo="Typo.caption" Color="Color.Info">Reserved: @string.Join(", ", context.ReservedMaterials)</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Qty">@context.OrderedQty @context.OrderedUnit</MudTd>
+                    <MudTd DataLabel="Dimensions">
+                        @if(context.Width > 0 || context.Length > 0)
+                        {
+                            @($"{context.Width:G29} x {context.Length:G29}")
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Weight">@context.Weight.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Area">@context.ProductionArea</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudItem>
+    </MudGrid>
+}
 
 @code {
     [Parameter] public int Id { get; set; }
-
+    private PickingListDetailDto? _list;
     private bool _loading = true;
-    private PickingListDetailDto? _dto;
-    private List<BreadcrumbItem> _breadcrumbs = new();
 
     protected override async Task OnInitializedAsync()
     {
-        _breadcrumbs = new List<BreadcrumbItem>
-        {
-            new BreadcrumbItem("Picking Lists", href: "picking-lists"),
-            new BreadcrumbItem($"Details", href: null, disabled: true)
-        };
-
-        _dto = await PickingListService.GetPickingListDetailAsync(Id);
+        _loading = true;
+        _list = await PickingService.GetPickingListAsync(Id);
         _loading = false;
+    }
+
+    private void GoBack()
+    {
+        NavManager.NavigateTo("picking-lists");
     }
 }

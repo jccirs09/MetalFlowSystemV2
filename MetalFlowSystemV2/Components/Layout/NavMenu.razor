@@ -2,63 +2,61 @@
 @inject NavigationManager NavigationManager
 
 <MudNavMenu>
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home" OnClick="OnLinkClick">Home</MudNavLink>
-    <MudNavLink Href="/counter" Icon="@Icons.Material.Filled.Add" OnClick="OnLinkClick">Counter</MudNavLink>
-    <MudNavLink Href="/weather" Icon="@Icons.Material.Filled.Cloud" OnClick="OnLinkClick">Weather</MudNavLink>
-    <MudNavLink Href="/auth" Icon="@Icons.Material.Filled.Lock" OnClick="OnLinkClick">Auth Required</MudNavLink>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+    <MudNavLink Href="counter" Icon="@Icons.Material.Filled.Add">Counter</MudNavLink>
+    <MudNavLink Href="weather" Icon="@Icons.Material.Filled.Cloud">Weather</MudNavLink>
+    <MudNavLink Href="auth" Icon="@Icons.Material.Filled.Lock">Auth Required</MudNavLink>
 
     <AuthorizeView Roles="Admin">
         <Authorized>
             <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="ml-4 mt-2 mb-1">ADMIN</MudText>
-            <MudNavLink Href="/admin/branches" Icon="@Icons.Material.Filled.Business" OnClick="OnLinkClick">Branches</MudNavLink>
-            <MudNavLink Href="/admin/production-areas" Icon="@Icons.Material.Filled.Factory" OnClick="OnLinkClick">Areas</MudNavLink>
-            <MudNavLink Href="/admin/shifts" Icon="@Icons.Material.Filled.Schedule" OnClick="OnLinkClick">Shifts</MudNavLink>
-            <MudNavLink Href="/admin/trucks" Icon="@Icons.Material.Filled.LocalShipping" OnClick="OnLinkClick">Trucks</MudNavLink>
-            <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People" OnClick="OnLinkClick">Users</MudNavLink>
-            <MudNavLink Href="/admin/items" Icon="@Icons.Material.Filled.Category" OnClick="OnLinkClick">Items</MudNavLink>
-            <MudNavLink Href="/admin/inventory" Icon="@Icons.Material.Filled.Inventory" OnClick="OnLinkClick">Inventory</MudNavLink>
-            <MudNavLink Href="/admin/packing-stations" Icon="@Icons.Material.Filled.Inbox" OnClick="OnLinkClick">Packing Stations</MudNavLink>
-            <MudNavLink Href="/admin/assignments" Icon="@Icons.Material.Filled.AssignmentInd" OnClick="OnLinkClick">Assignments</MudNavLink>
+            <MudNavLink Href="admin/branches" Icon="@Icons.Material.Filled.Business">Branches</MudNavLink>
+            <MudNavLink Href="admin/production-areas" Icon="@Icons.Material.Filled.Factory">Areas</MudNavLink>
+            <MudNavLink Href="admin/shifts" Icon="@Icons.Material.Filled.Schedule">Shifts</MudNavLink>
+            <MudNavLink Href="admin/trucks" Icon="@Icons.Material.Filled.LocalShipping">Trucks</MudNavLink>
+            <MudNavLink Href="admin/users" Icon="@Icons.Material.Filled.People">Users</MudNavLink>
+            <MudNavLink Href="admin/items" Icon="@Icons.Material.Filled.Category">Items</MudNavLink>
+            <MudNavLink Href="admin/inventory" Icon="@Icons.Material.Filled.Inventory">Inventory</MudNavLink>
+            <MudNavLink Href="admin/packing-stations" Icon="@Icons.Material.Filled.Inbox">Packing Stations</MudNavLink>
+            <MudNavLink Href="admin/assignments" Icon="@Icons.Material.Filled.AssignmentInd">Assignments</MudNavLink>
         </Authorized>
     </AuthorizeView>
 
     <AuthorizeView Roles="Admin,Supervisor">
         <Authorized>
              <MudText Typo="Typo.subtitle2" Color="Color.Warning" Class="ml-4 mt-2 mb-1">SUPERVISOR</MudText>
-             <MudNavLink Href="/supervisor/shifts" Icon="@Icons.Material.Filled.ViewTimeline" OnClick="OnLinkClick">Shift Overview</MudNavLink>
+             <MudNavLink Href="supervisor/shifts" Icon="@Icons.Material.Filled.ViewTimeline">Shift Overview</MudNavLink>
         </Authorized>
     </AuthorizeView>
 
     <AuthorizeView Roles="Admin,Supervisor,Planner">
         <Authorized>
              <MudText Typo="Typo.subtitle2" Color="Color.Info" Class="ml-4 mt-2 mb-1">PLANNING</MudText>
-             <MudNavLink Href="/admin/picking-lists" Icon="@Icons.Material.Filled.ListAlt" OnClick="OnLinkClick">Picking Lists</MudNavLink>
+             <MudNavLink Href="admin/picking-lists" Icon="@Icons.Material.Filled.ListAlt">Picking Lists</MudNavLink>
         </Authorized>
     </AuthorizeView>
 
     <AuthorizeView>
         <Authorized>
-            <MudNavLink Href="/check-in" Icon="@Icons.Material.Filled.CheckCircle" Match="NavLinkMatch.All" OnClick="OnLinkClick">Check In</MudNavLink>
+            <MudNavLink Href="check-in" Icon="@Icons.Material.Filled.CheckCircle" Match="NavLinkMatch.All">Check In</MudNavLink>
         </Authorized>
     </AuthorizeView>
 
     <AuthorizeView>
         <Authorized>
             <MudText Typo="Typo.subtitle2" Color="Color.Success" Class="ml-4 mt-2 mb-1">ACCOUNT</MudText>
-            <MudNavLink Href="/Account/Manage" Icon="@Icons.Material.Filled.Person" OnClick="OnLinkClick">@context.User.Identity?.Name</MudNavLink>
+            <MudNavLink Href="Account/Manage" Icon="@Icons.Material.Filled.Person">@context.User.Identity?.Name</MudNavLink>
             <MudNavLink OnClick="Logout" Icon="@Icons.Material.Filled.Logout">Logout</MudNavLink>
         </Authorized>
         <NotAuthorized>
              <MudText Typo="Typo.subtitle2" Color="Color.Warning" Class="ml-4 mt-2 mb-1">ACCESS</MudText>
-            <MudNavLink Href="/Account/Register" Icon="@Icons.Material.Filled.PersonAdd" OnClick="OnLinkClick">Register</MudNavLink>
-            <MudNavLink Href="/Account/Login" Icon="@Icons.Material.Filled.Login" OnClick="OnLinkClick">Login</MudNavLink>
+            <MudNavLink Href="Account/Register" Icon="@Icons.Material.Filled.PersonAdd">Register</MudNavLink>
+            <MudNavLink Href="Account/Login" Icon="@Icons.Material.Filled.Login">Login</MudNavLink>
         </NotAuthorized>
     </AuthorizeView>
 </MudNavMenu>
 
 @code {
-    [Parameter] public EventCallback OnLinkClick { get; set; }
-
     private void Logout()
     {
         NavigationManager.NavigateTo("Identity/Account/Logout", forceLoad: true);

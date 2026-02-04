@@ -2,7 +2,7 @@ using MetalFlowSystemV2.Client.Pages;
 using MetalFlowSystemV2.Components;
 using MetalFlowSystemV2.Components.Account;
 using MetalFlowSystemV2.Data;
-using MetalFlowSystemV2.Endpoints;
+using MetalFlowSystemV2.Api;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -88,8 +88,10 @@ app.MapRazorComponents<App>()
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
 app.MapShiftEndpoints();
 app.MapPickingListEndpoints();
+app.MapPackingEndpoints();
 
 // Seed Database
 using (var scope = app.Services.CreateScope())

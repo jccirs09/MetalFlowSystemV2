@@ -1,5 +1,4 @@
 @page "/admin/production-areas"
-@layout EmptyLayout
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data.Entities
@@ -10,7 +9,8 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<AdminLayout>
+<AdminShell>
+
     <MudText Typo="Typo.h5" Class="mb-4">Production Areas</MudText>
 
     <MudGrid Class="mb-4">
@@ -50,8 +50,9 @@
             <MudText>@(_selectedBranchId == null ? "Select a branch to view areas." : "No production areas found.")</MudText>
         </NoRecordsContent>
     </MudTable>
-</AdminLayout>
 
+
+</AdminShell>
 @code {
     private List<Branch> _branches = new();
     private List<ProductionArea> _productionAreas = new();

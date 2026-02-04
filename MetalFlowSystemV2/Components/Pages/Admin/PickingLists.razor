@@ -6,7 +6,6 @@
 @using MetalFlowSystemV2.Data.Services
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Authorization
-@layout EmptyLayout
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin,Supervisor,Planner")]
 @inject PickingListService PickingListService
@@ -15,7 +14,8 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ISnackbar Snackbar
 
-<AdminLayout>
+<AdminShell>
+
     <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
             <MudText Typo="Typo.h4">Picking Lists</MudText>
@@ -59,8 +59,9 @@
             </MudTable>
         }
     </MudContainer>
-</AdminLayout>
 
+
+</AdminShell>
 @code {
     private List<PickingList> _pickingLists = new();
     private bool _isLoading = true;

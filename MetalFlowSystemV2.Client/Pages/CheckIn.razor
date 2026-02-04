@@ -1,119 +1,96 @@
 @page "/check-in"
-@using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Web
-@using MetalFlowSystemV2.Client.Models
-@using MetalFlowSystemV2.Client.Services
+@layout ClientLayout
 @inject ShiftClientService ShiftService
 @inject ISnackbar Snackbar
-@inject NavigationManager Navigation
 @attribute [Authorize]
-@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
-    <MudText Typo="Typo.h4" GutterBottom="true">Shift Check-In</MudText>
+<PageTitle>Check In</PageTitle>
 
-    @if (_loading)
-    {
-        <MudProgressCircular Indeterminate="true" />
-    }
-    else if (_assignment == null)
-    {
-        <MudAlert Severity="Severity.Warning">
-            Unable to retrieve assignment information. Please contact your supervisor.
-        </MudAlert>
-    }
-    else
-    {
-        <MudCard>
-            <MudCardContent>
-                <MudText Typo="Typo.h5">@_assignment.BranchName</MudText>
-                <MudText Typo="Typo.body1" Class="mt-2">Shift: <b>@_assignment.ShiftName</b></MudText>
-                <MudText Typo="Typo.body1">Time: @_assignment.StartTime - @_assignment.EndTime</MudText>
-                <MudText Typo="Typo.body1">Location: <b>@_assignment.LocationName</b> (@_assignment.WorkMode)</MudText>
+<MudText Typo="Typo.h5" Class="mb-4">Operational Check-In</MudText>
 
-                @if (!string.IsNullOrEmpty(_assignment.Message))
-                {
-                    <MudAlert Severity="Severity.Info" Class="mt-4">@_assignment.Message</MudAlert>
-                }
+@if (_loading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else if (_assignment == null)
+{
+    <MudAlert Severity="Severity.Warning">
+        No active work assignment found. Please contact your supervisor.
+    </MudAlert>
+}
+else
+{
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">@_assignment.ShiftName</MudText>
+                <MudText Typo="Typo.body2">@_assignment.BranchName</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="6">
+                    <MudText><b>Start Time:</b> @_assignment.StartTime</MudText>
+                    <MudText><b>End Time:</b> @_assignment.EndTime</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    @if (_assignment.WorkMode == "ProductionArea")
+                    {
+                        <MudText><b>Area:</b> @_assignment.ProductionAreaName</MudText>
+                    }
+                    else if (_assignment.WorkMode == "PackingStation")
+                    {
+                        <MudText><b>Station:</b> @_assignment.PackingStationName</MudText>
+                    }
+                </MudItem>
+            </MudGrid>
 
-                @if (_assignment.IsCheckedIn)
-                {
-                     <MudAlert Severity="Severity.Success" Class="mt-4">
-                        Checked In at @_assignment.CheckedInAt?.ToLocalTime().ToString("t")
-                    </MudAlert>
-                }
-            </MudCardContent>
-            <MudCardActions>
-                @if (!_assignment.IsCheckedIn && string.IsNullOrEmpty(_assignment.Message))
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="PerformCheckIn" FullWidth="true" Disabled="_processing">
-                        @if (_processing)
-                        {
-                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
-                            <MudText Class="ms-2">Checking In...</MudText>
-                        }
-                        else
-                        {
-                            <MudText>Check In</MudText>
-                        }
-                    </MudButton>
-                }
-            </MudCardActions>
-        </MudCard>
-    }
-</MudContainer>
+            @if (_assignment.IsCheckedIn)
+            {
+                <MudAlert Severity="Severity.Success" Class="mt-4">
+                    Checked in at @_assignment.CheckedInAt?.ToLocalTime().ToString("t")
+                </MudAlert>
+            }
+        </MudCardContent>
+        <MudCardActions>
+            @if (!_assignment.IsCheckedIn)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PerformCheckIn" Disabled="_processing">Check In</MudButton>
+            }
+        </MudCardActions>
+    </MudCard>
+}
 
 @code {
+    private UserAssignmentDto? _assignment;
     private bool _loading = true;
     private bool _processing = false;
-    private UserAssignmentDto? _assignment;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadAssignment();
+        await LoadData();
     }
 
-    private async Task LoadAssignment()
+    private async Task LoadData()
     {
         _loading = true;
-        try
-        {
-            _assignment = await ShiftService.GetMyAssignmentAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Error loading assignment: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _loading = false;
-        }
+        _assignment = await ShiftService.GetMyAssignmentAsync();
+        _loading = false;
     }
 
     private async Task PerformCheckIn()
     {
-        if (_assignment == null) return;
         _processing = true;
-        try
+        var success = await ShiftService.CheckInAsync();
+        if (success)
         {
-            var result = await ShiftService.CheckInAsync(_assignment.BranchId);
-            if (result.Success)
-            {
-                Snackbar.Add("Checked in successfully!", Severity.Success);
-                await LoadAssignment();
-            }
-            else
-            {
-                Snackbar.Add($"Check-in failed: {result.Message}", Severity.Error);
-            }
+            Snackbar.Add("Check-in successful", Severity.Success);
+            await LoadData();
         }
-        catch (Exception ex)
+        else
         {
-             Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add("Check-in failed", Severity.Error);
         }
-        finally
-        {
-            _processing = false;
-        }
+        _processing = false;
     }
 }

@@ -9,15 +9,25 @@
             <MudTextField @bind-Value="Item.ItemCode" Label="Item Code" Required="true" ReadOnly="@(_isEdit)" />
             <MudTextField @bind-Value="Item.Description" Label="Description" Required="true" Lines="2" />
 
-            <MudSelect T="string" Label="UOM" Value="@Item.UOM" ValueChanged="OnUOMChanged" AnchorOrigin="Origin.BottomCenter">
-                <MudSelectItem Value="@("PCS")">PCS (Sheet)</MudSelectItem>
-                <MudSelectItem Value="@("LBS")">LBS (Coil)</MudSelectItem>
+            <MudSelect T="string" Label="UOM" Value="Item.UOM" ValueChanged="OnUOMChanged" AnchorOrigin="Origin.BottomCenter" Required="true">
+                <MudSelectItem Value="@("LBS")">LBS (Coils)</MudSelectItem>
+                <MudSelectItem Value="@("PCS")">PCS (Sheets)</MudSelectItem>
             </MudSelect>
 
-            @if (Item.UOM == "PCS")
-            {
-                 <MudNumericField @bind-Value="Item.PoundsPerSquareFoot" Label="Pounds Per Sq Ft" Required="true" Min="0.0001M" Format="N4" />
+            <MudNumericField @bind-Value="Item.PoundsPerSquareFoot" Label="Pounds Per Square Foot"
+                             Disabled="@_ppsfDisabled"
+                             Min="0"
+                             Validation="@(new Func<decimal, string?>(ValidatePPSF))"
+                             Format="F4" />
 
+            <MudSelect T="ItemType" Label="Type" @bind-Value="Item.Type" AnchorOrigin="Origin.BottomCenter" ReadOnly="true" HelperText="Determined by UOM">
+                <MudSelectItem Value="ItemType.Coil">Coil</MudSelectItem>
+                <MudSelectItem Value="ItemType.Sheet">Sheet</MudSelectItem>
+                <MudSelectItem Value="ItemType.Other">Other</MudSelectItem>
+            </MudSelect>
+
+            @if (Item.Type == ItemType.Sheet)
+            {
                  <MudSelect T="int?" Label="Parent Coil" @bind-Value="Item.ParentItemId" AnchorOrigin="Origin.BottomCenter" Clearable="true">
                     @foreach (var coil in _coils)
                     {
@@ -43,6 +53,7 @@
     private MudForm form = default!;
     private bool success;
     private bool _isEdit;
+    private bool _ppsfDisabled = true;
     private List<Item> _coils = new();
 
     protected override async Task OnInitializedAsync()
@@ -51,32 +62,39 @@
         {
             _isEdit = true;
         }
-        else
-        {
-            // Default new item
-            if (string.IsNullOrEmpty(Item.UOM))
-            {
-                 Item.UOM = "PCS";
-                 Item.Type = ItemType.Sheet;
-            }
-        }
 
         _coils = await ItemService.GetCoilItemsAsync();
+        UpdateUiState();
     }
 
-    private void OnUOMChanged(string uom)
+    private async Task OnUOMChanged(string uom)
     {
         Item.UOM = uom;
-        if (uom == "PCS")
-        {
-            Item.Type = ItemType.Sheet;
-        }
-        else if (uom == "LBS")
+        UpdateUiState();
+        await Task.Delay(50); // Small delay to ensure render cycle sync
+        StateHasChanged();
+    }
+
+    private void UpdateUiState()
+    {
+        if (Item.UOM == "LBS")
         {
             Item.Type = ItemType.Coil;
-            Item.PoundsPerSquareFoot = null;
-            Item.ParentItemId = null;
+            Item.PoundsPerSquareFoot = 0;
+            _ppsfDisabled = true;
         }
+        else if (Item.UOM == "PCS")
+        {
+            Item.Type = ItemType.Sheet;
+            _ppsfDisabled = false;
+        }
+    }
+
+    private string? ValidatePPSF(decimal value)
+    {
+        if (Item.UOM == "PCS" && value <= 0)
+            return "PPSF must be > 0 for Sheets.";
+        return null;
     }
 
     private async Task Submit()

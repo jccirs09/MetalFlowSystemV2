@@ -16,7 +16,7 @@ namespace MetalFlowSystemV2.Client.Services
         {
             try
             {
-                return await _http.GetFromJsonAsync<UserAssignmentDto>("api/shifts/my-assignment");
+                return await _http.GetFromJsonAsync<UserAssignmentDto>("api/shifts/assignment");
             }
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
@@ -24,10 +24,10 @@ namespace MetalFlowSystemV2.Client.Services
             }
         }
 
-        public async Task<CheckInResult> CheckInAsync(int branchId)
+        public async Task<bool> CheckInAsync()
         {
-            var response = await _http.PostAsJsonAsync("api/shifts/check-in", new CheckInRequest { BranchId = branchId });
-            return await response.Content.ReadFromJsonAsync<CheckInResult>() ?? new CheckInResult { Success = false, Message = "Parsing error" };
+            var response = await _http.PostAsync("api/shifts/checkin", null);
+            return response.IsSuccessStatusCode;
         }
     }
 }

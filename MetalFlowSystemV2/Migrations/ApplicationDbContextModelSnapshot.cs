@@ -195,7 +195,7 @@ namespace MetalFlowSystemV2.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("Length")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasColumnType("decimal(18, 4)");
 
                     b.Property<string>("LocationCode")
                         .IsRequired()
@@ -209,7 +209,7 @@ namespace MetalFlowSystemV2.Migrations
                         .HasColumnType("decimal(18, 2)");
 
                     b.Property<decimal>("Width")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasColumnType("decimal(18, 4)");
 
                     b.HasKey("Id");
 
@@ -242,8 +242,8 @@ namespace MetalFlowSystemV2.Migrations
                     b.Property<int?>("ParentItemId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<decimal?>("PoundsPerSquareFoot")
-                        .HasColumnType("decimal(18, 4)");
+                    b.Property<decimal>("PoundsPerSquareFoot")
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<int>("Type")
                         .HasColumnType("INTEGER");
@@ -261,6 +261,36 @@ namespace MetalFlowSystemV2.Migrations
                     b.HasIndex("ParentItemId");
 
                     b.ToTable("Items");
+                });
+
+            modelBuilder.Entity("MetalFlowSystemV2.Data.Entities.PackingEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LineCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("PackedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PackedWeightLbs")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("PickingListId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StationShiftId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PickingListId");
+
+                    b.HasIndex("StationShiftId");
+
+                    b.ToTable("PackingEvents");
                 });
 
             modelBuilder.Entity("MetalFlowSystemV2.Data.Entities.PackingStation", b =>
@@ -987,6 +1017,25 @@ namespace MetalFlowSystemV2.Migrations
                         .HasForeignKey("ParentItemId");
 
                     b.Navigation("ParentItem");
+                });
+
+            modelBuilder.Entity("MetalFlowSystemV2.Data.Entities.PackingEvent", b =>
+                {
+                    b.HasOne("MetalFlowSystemV2.Data.Entities.PickingList", "PickingList")
+                        .WithMany()
+                        .HasForeignKey("PickingListId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MetalFlowSystemV2.Data.Entities.StationShift", "StationShift")
+                        .WithMany()
+                        .HasForeignKey("StationShiftId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PickingList");
+
+                    b.Navigation("StationShift");
                 });
 
             modelBuilder.Entity("MetalFlowSystemV2.Data.Entities.PackingStation", b =>

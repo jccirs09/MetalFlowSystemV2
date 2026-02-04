@@ -21,6 +21,7 @@ namespace MetalFlowSystemV2.Data
     public DbSet<PickingList> PickingLists { get; set; }
     public DbSet<PickingListLine> PickingListLines { get; set; }
     public DbSet<PickingListLineReservedMaterial> PickingListLineReservedMaterials { get; set; }
+    public DbSet<PackingEvent> PackingEvents { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

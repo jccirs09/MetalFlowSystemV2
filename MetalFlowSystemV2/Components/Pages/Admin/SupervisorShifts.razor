@@ -1,5 +1,4 @@
 @page "/supervisor/shifts"
-@layout EmptyLayout
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin,Supervisor")]
 @using MetalFlowSystemV2.Data.Entities
@@ -11,7 +10,8 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<AdminLayout>
+<AdminShell>
+
     <MudText Typo="Typo.h5" Class="mb-4">Daily Shift Overview</MudText>
 
     <MudGrid Class="mb-4">
@@ -92,8 +92,9 @@
         </MudTabPanel>
     </MudTabs>
 
-</AdminLayout>
 
+
+</AdminShell>
 @code {
     [Inject] AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
 

@@ -1,5 +1,4 @@
 @page "/admin/shifts"
-@layout EmptyLayout
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @attribute [Authorize(Roles = "Admin")]
 @using MetalFlowSystemV2.Data.Entities
@@ -10,7 +9,8 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<AdminLayout>
+<AdminShell>
+
     <MudText Typo="Typo.h5" Class="mb-4">Shifts</MudText>
 
     <MudGrid Class="mb-4">
@@ -56,8 +56,9 @@
             <MudText>@(_selectedBranchId == null ? "Select a branch to view shifts." : "No shifts found.")</MudText>
         </NoRecordsContent>
     </MudTable>
-</AdminLayout>
 
+
+</AdminShell>
 @code {
     private List<Branch> _branches = new();
     private List<Shift> _shifts = new();
