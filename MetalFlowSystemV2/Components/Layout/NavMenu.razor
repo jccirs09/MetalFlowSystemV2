@@ -1,7 +1,8 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager NavigationManager
 
 <MudNavMenu>
-    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
     <MudNavLink Href="counter" Icon="@Icons.Material.Filled.Add">Counter</MudNavLink>
     <MudNavLink Href="weather" Icon="@Icons.Material.Filled.Cloud">Weather</MudNavLink>
     <MudNavLink Href="auth" Icon="@Icons.Material.Filled.Lock">Auth Required</MudNavLink>
@@ -45,15 +46,7 @@
         <Authorized>
             <MudText Typo="Typo.subtitle2" Color="Color.Success" Class="ml-4 mt-2 mb-1">ACCOUNT</MudText>
             <MudNavLink Href="Account/Manage" Icon="@Icons.Material.Filled.Person">@context.User.Identity?.Name</MudNavLink>
-            <MudNavLink>
-                 <form action="Account/Logout" method="post">
-                    <AntiforgeryToken />
-                    <input type="hidden" name="ReturnUrl" value="" />
-                    <button type="submit" style="background:none;border:none;padding:0;color:inherit;cursor:pointer;width:100%;text-align:left;display:flex;">
-                         Logout
-                    </button>
-                </form>
-            </MudNavLink>
+            <MudNavLink OnClick="Logout" Icon="@Icons.Material.Filled.Logout">Logout</MudNavLink>
         </Authorized>
         <NotAuthorized>
              <MudText Typo="Typo.subtitle2" Color="Color.Warning" Class="ml-4 mt-2 mb-1">ACCESS</MudText>
@@ -62,3 +55,10 @@
         </NotAuthorized>
     </AuthorizeView>
 </MudNavMenu>
+
+@code {
+    private void Logout()
+    {
+        NavigationManager.NavigateTo("Identity/Account/Logout", forceLoad: true);
+    }
+}

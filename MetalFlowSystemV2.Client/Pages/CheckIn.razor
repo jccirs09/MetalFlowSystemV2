@@ -1,0 +1,96 @@
+@page "/check-in"
+@layout ClientLayout
+@inject ShiftClientService ShiftService
+@inject ISnackbar Snackbar
+@attribute [Authorize]
+
+<PageTitle>Check In</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Operational Check-In</MudText>
+
+@if (_loading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else if (_assignment == null)
+{
+    <MudAlert Severity="Severity.Warning">
+        No active work assignment found. Please contact your supervisor.
+    </MudAlert>
+}
+else
+{
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">@_assignment.ShiftName</MudText>
+                <MudText Typo="Typo.body2">@_assignment.BranchName</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="6">
+                    <MudText><b>Start Time:</b> @_assignment.StartTime</MudText>
+                    <MudText><b>End Time:</b> @_assignment.EndTime</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    @if (_assignment.WorkMode == "ProductionArea")
+                    {
+                        <MudText><b>Area:</b> @_assignment.ProductionAreaName</MudText>
+                    }
+                    else if (_assignment.WorkMode == "PackingStation")
+                    {
+                        <MudText><b>Station:</b> @_assignment.PackingStationName</MudText>
+                    }
+                </MudItem>
+            </MudGrid>
+
+            @if (_assignment.IsCheckedIn)
+            {
+                <MudAlert Severity="Severity.Success" Class="mt-4">
+                    Checked in at @_assignment.CheckedInAt?.ToLocalTime().ToString("t")
+                </MudAlert>
+            }
+        </MudCardContent>
+        <MudCardActions>
+            @if (!_assignment.IsCheckedIn)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PerformCheckIn" Disabled="_processing">Check In</MudButton>
+            }
+        </MudCardActions>
+    </MudCard>
+}
+
+@code {
+    private UserAssignmentDto? _assignment;
+    private bool _loading = true;
+    private bool _processing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _assignment = await ShiftService.GetMyAssignmentAsync();
+        _loading = false;
+    }
+
+    private async Task PerformCheckIn()
+    {
+        _processing = true;
+        var success = await ShiftService.CheckInAsync();
+        if (success)
+        {
+            Snackbar.Add("Check-in successful", Severity.Success);
+            await LoadData();
+        }
+        else
+        {
+            Snackbar.Add("Check-in failed", Severity.Error);
+        }
+        _processing = false;
+    }
+}

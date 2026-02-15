@@ -1,0 +1,80 @@
+@page "/picking-lists"
+@layout ClientLayout
+@inject PickingListClientService PickingService
+@inject NavigationManager NavManager
+@attribute [Authorize]
+
+<PageTitle>Picking Lists</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Picking Lists</MudText>
+
+<MudTable Items="_lists" Hover="true" Loading="_loading" OnRowClick="RowClickEvent" T="PickingListDto">
+    <ToolBarContent>
+        <MudSpacer />
+        <MudSelect T="string" Label="Status" Value="_statusFilter" ValueChanged="OnStatusChanged" Class="mt-0" AdornmentColor="Color.Primary">
+            <MudSelectItem Value="@((string?)null)">All</MudSelectItem>
+            <MudSelectItem Value="@("New")">New</MudSelectItem>
+            <MudSelectItem Value="@("In Progress")">In Progress</MudSelectItem>
+            <MudSelectItem Value="@("Completed")">Completed</MudSelectItem>
+        </MudSelect>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Number</MudTh>
+        <MudTh>Ship Date</MudTh>
+        <MudTh>Buyer</MudTh>
+        <MudTh>Weight</MudTh>
+        <MudTh>Status</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Number">@context.PickingListNumber</MudTd>
+        <MudTd DataLabel="Ship Date">@context.ShipDate?.ToShortDateString()</MudTd>
+        <MudTd DataLabel="Buyer">@context.Buyer</MudTd>
+        <MudTd DataLabel="Weight">@context.TotalWeight.ToString("N0")</MudTd>
+        <MudTd DataLabel="Status">
+            <MudChip T="string" Color="@GetStatusColor(context.Status)" Size="Size.Small">@context.Status</MudChip>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private List<PickingListDto> _lists = new();
+    private bool _loading = true;
+    private string? _statusFilter;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _lists = await PickingService.GetPickingListsAsync(_statusFilter);
+        _loading = false;
+    }
+
+    private async Task OnStatusChanged(string status)
+    {
+        _statusFilter = status;
+        await LoadData();
+    }
+
+    private void RowClickEvent(TableRowClickEventArgs<PickingListDto> tableRowClickEventArgs)
+    {
+        NavManager.NavigateTo($"picking-lists/{tableRowClickEventArgs.Item.Id}");
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "New" => Color.Info,
+            "In Progress" => Color.Warning,
+            "Completed" => Color.Success,
+            _ => Color.Default
+        };
+    }
+}

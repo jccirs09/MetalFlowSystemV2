@@ -1,0 +1,145 @@
+@page "/packing"
+@using MetalFlowSystemV2.Client.Services
+@using MetalFlowSystemV2.Client.Dtos
+@inject ShiftClientService ShiftService
+@inject PackingClientService PackingService
+@inject ISnackbar Snackbar
+@rendermode InteractiveWebAssembly
+
+<PageTitle>Packing Station</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h4" GutterBottom="true">Packing Station</MudText>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_assignment == null)
+    {
+        <MudAlert Severity="Severity.Warning">You do not have an active assignment.</MudAlert>
+    }
+    else if (_assignment.PackingStationId == null)
+    {
+        <MudAlert Severity="Severity.Info">You are not assigned to a Packing Station (Assigned to: @_assignment.ProductionAreaName).</MudAlert>
+    }
+    else
+    {
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6">Station: @_assignment.PackingStationName</MudText>
+            <MudText>Shift: @_assignment.ShiftName</MudText>
+        </MudPaper>
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Record Packing Event</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudNumericField @bind-Value="_pickingListId" Label="Picking List ID" Variant="Variant.Outlined" Min="1" />
+                        <MudNumericField @bind-Value="_packedWeight" Label="Packed Weight (lbs)" Variant="Variant.Outlined" Min="0" Step="0.1M" />
+                        <MudNumericField @bind-Value="_linesPacked" Label="Lines Packed" Variant="Variant.Outlined" Min="1" />
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitPackingEvent" Disabled="_submitting">Record Pack</MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Shift Events</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                         <MudTable Items="_events" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Time</MudTh>
+                                <MudTh>List ID</MudTh>
+                                <MudTh>Weight</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>@context.PackedAt.ToLocalTime().ToString("t")</MudTd>
+                                <MudTd>@context.PickingListId</MudTd>
+                                <MudTd>@context.PackedWeight</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private bool _loading = true;
+    private bool _submitting = false;
+    private UserAssignmentDto? _assignment;
+    private List<PackingEventDto> _events = new();
+
+    private int _pickingListId;
+    private decimal _packedWeight;
+    private int _linesPacked = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _assignment = await ShiftService.GetMyAssignmentAsync();
+            if (_assignment?.StationShiftId != null)
+            {
+                await LoadEvents(_assignment.StationShiftId.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading packing data: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadEvents(int stationShiftId)
+    {
+        _events = await PackingService.GetEventsForStationShiftAsync(stationShiftId);
+    }
+
+    private async Task SubmitPackingEvent()
+    {
+        if (_assignment?.StationShiftId == null) return;
+
+        _submitting = true;
+        try
+        {
+            var dto = new PackingEventDto
+            {
+                StationShiftId = _assignment.StationShiftId.Value,
+                PickingListId = _pickingListId,
+                PackedWeight = _packedWeight,
+                LinesPacked = _linesPacked
+            };
+
+            await PackingService.RecordPackingEventAsync(dto);
+            Snackbar.Add("Packing event recorded", Severity.Success);
+
+            // Reset and reload
+            _packedWeight = 0;
+            _linesPacked = 1;
+            await LoadEvents(_assignment.StationShiftId.Value);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error recording event: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

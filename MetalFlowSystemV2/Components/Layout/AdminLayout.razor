@@ -1,32 +1,12 @@
+@inherits LayoutComponentBase
 @using MudBlazor
-@using MetalFlowSystemV2.Client
-@using MetalFlowSystemV2.Components.Shared
 
-<MudProviders />
+@*
+    This Layout is STATIC (no @rendermode).
+    It allows the Router to pass the @Body (RenderFragment).
+    The actual UI chrome and interactivity are handled by the page's <AdminShell> wrapper.
+*@
 
-<MudLayout>
-    <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
-        <MudText Typo="Typo.h5" Class="ml-3">MetalFlowSystemV2</MudText>
-        <MudSpacer />
-        <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Color="Color.Inherit" Edge="Edge.End" />
-    </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
-        <NavMenu />
-    </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Large" Class="my-4 pt-4">
-            @ChildContent
-        </MudContainer>
-    </MudMainContent>
-</MudLayout>
-
-@code {
-    [Parameter] public RenderFragment ChildContent { get; set; } = default!;
-    bool _drawerOpen = true;
-
-    void DrawerToggle()
-    {
-        _drawerOpen = !_drawerOpen;
-    }
-}
+<div id="admin-layout-root">
+    @Body
+</div>
